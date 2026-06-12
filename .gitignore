@@ -1,0 +1,12 @@
+# โน้ตภายใน (มีอีเมล/IDs) — ไม่ขึ้น public
+CLAUDE.md
+
+# backend: มีข้อมูลการเงินจริงใน SEED + clasp config ของเจ้าของ — เก็บ local เท่านั้น
+apps-script/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# หมายเหตุ: config.js (WEB_APP_URL) ต้อง commit เพราะ GitHub Pages ต้องเสิร์ฟ
+# URL จึง public เสมอ — ความปลอดภัยอยู่ที่ PIN ใน Script Properties (ตั้งรหัสยาว)
