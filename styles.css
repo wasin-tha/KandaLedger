@@ -552,3 +552,61 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
   .spinner { animation: spin .7s linear infinite !important; }
   .skeleton { animation: sk 1.4s ease infinite !important; }
 }
+
+/* ============================================================
+   MODULE: ROOMS (ห้องพัก) — mobile-first daily entry
+   ส้ม = ชั่วคราว (accent) · เขียว = ค้างคืน (success) ให้ตรงชีทเดิม
+   ============================================================ */
+.room-bar { padding: 12px 14px; position: sticky; top: 0; z-index: 5; }
+.room-datenav { display: flex; align-items: center; gap: 8px; }
+.room-date { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; background: var(--surface-2); color: var(--text); font: inherit; font-weight: 700; font-size: 16px; padding: 9px 12px; border-radius: var(--r); cursor: pointer; }
+.room-date svg { width: 16px; height: 16px; color: var(--primary); }
+.room-sync { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; background: var(--success); transition: background .2s; }
+.room-sync.pending { background: var(--accent); }
+.room-sync.syncing { background: var(--accent); animation: pulse 1s ease infinite; }
+.room-sync.offline { background: var(--text-3); box-shadow: 0 0 0 3px var(--danger-50); }
+@keyframes pulse { 50% { opacity: .35; } }
+.room-who { margin-top: 8px; font-size: 13px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+.room-who svg { width: 15px; height: 15px; }
+.room-who b { color: var(--text); }
+
+.room-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: var(--s4); }
+@media (min-width: 720px) { .room-grid { grid-template-columns: 1fr 1fr; } }
+.room-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; opacity: .62; transition: opacity .15s, border-color .15s; }
+.room-row.has { opacity: 1; border-color: var(--border-strong); }
+.room-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.room-name { font-weight: 700; font-size: 15px; }
+.room-baht { font-weight: 700; font-size: 14px; color: var(--primary); font-variant-numeric: tabular-nums; }
+.st-line { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.st-lab { flex: 1; font-size: 13px; font-weight: 600; }
+.st-lab.temp { color: var(--accent); }
+.st-lab.night { color: var(--success); }
+.st-btn { width: 40px; height: 40px; border-radius: 10px; border: 1.5px solid var(--border-strong); background: var(--surface-2); color: var(--text); font-size: 22px; font-weight: 600; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+.st-btn:active { transform: scale(.92); }
+.st-btn:disabled { opacity: .35; cursor: default; }
+.st-btn.temp { border-color: var(--accent); color: var(--accent); }
+.st-btn.night { border-color: var(--success); color: var(--success); }
+.st-val { min-width: 26px; text-align: center; font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; }
+.st-val.ro { min-width: 32px; color: var(--text-2); }
+
+.room-foot { margin-top: var(--s4); position: sticky; bottom: 8px; z-index: 4; }
+.room-foot-line { display: flex; align-items: center; justify-content: space-between; }
+.room-foot-line span { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text-2); }
+.room-foot-line svg { width: 16px; height: 16px; }
+.room-foot-line b { font-size: 22px; color: var(--primary); font-variant-numeric: tabular-nums; }
+
+.room-notes { margin-top: var(--s4); }
+.note-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.note-row { display: flex; gap: 6px; align-items: center; }
+.note-text { flex: 1; }
+.note-text-ro { flex: 1; font-size: 14px; }
+.note-amt { max-width: 96px; text-align: right; }
+.note-amt-ro { font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.note-add { display: flex; gap: 6px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+.note-add .input:first-child { flex: 1; min-width: 140px; }
+
+.cmp-table td { font-variant-numeric: tabular-nums; }
+.cmp-table .cmp-bad { color: var(--danger); font-weight: 700; background: var(--danger-50); }
+.cmp-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.cmp-notes ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+.cmp-notes li.dim { list-style: none; margin-left: -18px; }

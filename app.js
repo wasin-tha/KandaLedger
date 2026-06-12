@@ -54,47 +54,73 @@ const IC = {
 const svg = (name, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[name] || ''}</svg>`;
 
 /* ---------- state ---------- */
+// role-based access: ผู้ใช้ใส่ PIN เดียว → server คืน me={role,caps,roomsRead,roomsWrite}
+// เก็บ PIN ใน localStorage = auto-login ข้ามการปิด/เปิดเบราว์เซอร์
+const MODULES = ['utility', 'purchase', 'rooms'];
+const todayBE = () => { const n = new Date(); return { y: n.getFullYear() + 543, m: n.getMonth() + 1, d: n.getDate() }; };
+const _tb = todayBE();
 const S = {
-  module: ['utility', 'purchase'].includes(localStorage.getItem('kanda_module')) ? localStorage.getItem('kanda_module') : 'utility',
-  // two-level access:
-  //   entry  = เข้าเว็บได้ + ดู/แก้ ค่าน้ำค่าไฟ + ดู สั่งซื้อ
-  //   purch  = แก้ไข สั่งซื้อ ได้ (ต้องรหัสที่ 2)
-  // เก็บรหัสใน localStorage = จำการล็อกอินข้ามการปิด/เปิดเบราว์เซอร์ (auto-login)
-  auth: { entry: false, purch: false },
-  entryPin: localStorage.getItem('kanda_entry') || '',
-  purchPin: localStorage.getItem('kanda_purch') || '',
+  module: MODULES.includes(localStorage.getItem('kanda_module')) ? localStorage.getItem('kanda_module') : 'utility',
+  pin: localStorage.getItem('kanda_pin') || '',
+  me: null,                       // { role, label, caps, roomsRead, roomsWrite }
   theme: localStorage.getItem('kanda_theme') || 'light',
-  data: { workers: [], bills: [], rounds: [], items: [], images: [], products: [] },
-  ui: { worker: null, fromIdx: 0, toIdx: 0, roundId: null, collapsedYears: new Set(), _initFor: null, newGroups: [], catalog: false, pasteGid: null, pasteRid: null, pastePid: null, roundSearch: '' },
+  data: { workers: [], bills: [], rounds: [], items: [], images: [], products: [], rentals: [], rates: [], notes: [] },
+  ui: {
+    worker: null, fromIdx: 0, toIdx: 0, roundId: null, collapsedYears: new Set(), _initFor: null, newGroups: [], catalog: false, pasteGid: null, pasteRid: null, pastePid: null, roundSearch: '',
+    roomY: _tb.y, roomM: _tb.m, roomD: _tb.d, roomSel: null,   // roomSel = source ('maid'/'plug') หรือ 'compare'
+  },
+  roomQueue: [],                  // คิว setRoom ที่รอส่ง (กันเน็ตหลุด)
+  roomSync: 'ok',                 // ok | pending | syncing | offline
   loading: false,
   error: '',
 };
+// โหลดคิวห้องพักที่ค้างจาก session ก่อน (reload ไม่หาย)
+try { const q = JSON.parse(localStorage.getItem('kanda_roomq') || '[]'); if (Array.isArray(q)) S.roomQueue = q; } catch (e) { }
+
+/* ---------- permission helpers ---------- */
+function loggedIn() { return !HAS_BACKEND || !!S.me; }
+function can(cap) { return !!(S.me && S.me.caps && S.me.caps[cap]); }
+function canWriteSource(src) { return !!(S.me && S.me.roomsWrite && S.me.roomsWrite.indexOf(src) >= 0); }
+function allowedModules() {
+  if (!HAS_BACKEND) return MODULES.slice();
+  const c = (S.me && S.me.caps) || {};
+  const a = [];
+  if (c.utilityRead || c.utilityWrite) a.push('utility');
+  if (c.purchaseRead) a.push('purchase');
+  if (c.rooms) a.push('rooms');
+  return a;
+}
 
 /* ============================================================
    API client (Apps Script). POST uses text/plain body to skip
    CORS preflight; GET for reads.
    ============================================================ */
 const api = {
-  async getAll() {
-    if (!HAS_BACKEND) return demoData();
-    // POST (text/plain) แทน GET query — กัน PIN โผล่ใน URL/log. คืน data เฉย ๆ ไม่แตะ S.data (ให้ผู้เรียกจัดการเอง เพื่อให้ pollOnce เทียบ diff ได้)
-    const r = await fetch(CFG.WEB_APP_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'getAll', entryPin: S.entryPin }),
-    });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || 'load failed');
-    return j.data;
+  async raw(body) {
+    const r = await fetch(CFG.WEB_APP_URL, { method: 'POST', body: JSON.stringify(body) });
+    return r.json();
   },
+  // คืน { data, me } — ไม่แตะ S.data (ให้ผู้เรียกจัดการ เพื่อให้ pollOnce เทียบ diff ได้)
+  async getAll() {
+    if (!HAS_BACKEND) return { data: demoData(), me: demoMe() };
+    const j = await this.raw({ action: 'getAll', pin: S.pin });
+    if (!j.ok) throw new Error(j.error || 'load failed');
+    return { data: j.data, me: j.me };
+  },
+  // mutation ทั่วไป — รับ data/me กลับมาแล้วอัปเดต state (ใช้กับ action ที่อยากให้ render ใหม่)
   async post(action, payload = {}) {
     if (!HAS_BACKEND) throw new Error('ยังไม่ได้เชื่อม backend — ดู README.md');
-    const r = await fetch(CFG.WEB_APP_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action, entryPin: S.entryPin, purchPin: S.purchPin, payload }),
-    });
-    const j = await r.json();
+    const j = await this.raw({ action, pin: S.pin, payload });
     if (!j.ok) throw new Error(j.error || 'request failed');
     if (j.data) S.data = j.data;
+    if (j.me) S.me = j.me;
+    return j;
+  },
+  // เรียกแบบไม่มี side-effect ต่อ S.data (ใช้กับ autosave ห้องพัก ที่จัดการ state เองแบบ optimistic)
+  async call(action, payload = {}) {
+    if (!HAS_BACKEND) return { ok: true };
+    const j = await this.raw({ action, pin: S.pin, payload });
+    if (!j.ok) throw new Error(j.error || 'request failed');
     return j;
   },
 };
@@ -188,7 +214,7 @@ function render() {
   const view = $('#view');
 
   // Entry gate: must unlock the site once (real backend only)
-  if (HAS_BACKEND && !S.auth.entry) {
+  if (HAS_BACKEND && !loggedIn()) {
     $('#lockBtn').classList.add('hidden');
     $('#moduleSeg').classList.add('hidden');   // ซ่อนแท็บตอนยังไม่ล็อกอิน (กันกดแล้วฟอร์มหาย)
     if (!$('.gate')) entryGate();              // คงฟอร์ม login ไว้ ไม่ล้าง #view ทิ้ง
@@ -197,14 +223,22 @@ function render() {
   $('#lockBtn').classList.toggle('hidden', !HAS_BACKEND);
   $('#moduleSeg').classList.remove('hidden');
 
-  $$('#moduleSeg button').forEach(b => b.classList.toggle('active', b.dataset.module === S.module));
+  // แสดงเฉพาะแท็บที่ role อนุญาต + เลือกโมดูลที่ถูกต้อง
+  const allowed = allowedModules();
+  if (allowed.length && !allowed.includes(S.module)) { S.module = allowed[0]; localStorage.setItem('kanda_module', S.module); }
+  $$('#moduleSeg button').forEach(b => {
+    const ok = allowed.includes(b.dataset.module);
+    b.hidden = !ok;
+    b.classList.toggle('active', b.dataset.module === S.module);
+  });
 
   if (S.loading) { view.innerHTML = skeletonView(); return; }
   if (S.error) { view.innerHTML = errorView(S.error); return; }
   if (!HAS_BACKEND) renderBackendBanner();
 
   if (S.module === 'utility') view.innerHTML = renderUtility();
-  else view.innerHTML = renderPurchase();
+  else if (S.module === 'purchase') view.innerHTML = renderPurchase();
+  else view.innerHTML = renderRooms();
 }
 
 function renderBackendBanner() {
@@ -221,7 +255,7 @@ function renderBackendBanner() {
    MODULE 1: UTILITY (ค่าน้ำค่าไฟ)
    ============================================================ */
 function renderUtility() {
-  const admin = S.auth.entry;   // เข้าเว็บได้ = แก้ค่าน้ำค่าไฟได้เลย
+  const admin = can('utilityWrite');   // สิทธิ์แก้ค่าน้ำค่าไฟ (owner/plug)
   if (!S.ui.worker || !S.data.workers.find(w => w.name === S.ui.worker))
     S.ui.worker = S.data.workers[0] ? S.data.workers[0].name : null;
 
@@ -455,7 +489,7 @@ function toggleYear(y) {
    MODULE 2: PURCHASE (สั่งซื้อ แบ่งรอบ)
    ============================================================ */
 function renderPurchase() {
-  const admin = S.auth.purch;   // แก้สั่งซื้อ ต้องรหัสที่ 2
+  const admin = can('purchaseWrite');   // สิทธิ์แก้สั่งซื้อ (owner เท่านั้น)
   if (S.ui.catalog) return renderCatalog(admin);
   if (S.ui.roundId) return renderRoundDetail(admin);
 
@@ -503,7 +537,7 @@ function renderPurchase() {
         ${admin
       ? `<button class="btn btn-ghost btn-sm" onclick="openCatalog()">${svg('box')} จัดการสินค้า</button>
          <button class="btn btn-primary" onclick="addRoundPrompt()">${svg('plus')} เพิ่มรอบใหม่</button>`
-      : `<button class="btn btn-ghost btn-sm" onclick="unlockPurchase()">${svg('lock')} ปลดล็อกเพื่อแก้ไข</button>`}
+      : `<span class="badge" style="background:var(--surface-3);color:var(--text-2)">${svg('lock')} อ่านอย่างเดียว</span>`}
       </div>
     </div>
     <div class="row mt2 no-print" style="gap:8px;align-items:center">
@@ -559,7 +593,7 @@ function renderRoundDetail(admin) {
     ${admin
       ? `<button class="btn btn-ghost btn-sm" onclick="editRoundPrompt('${esc(r.roundId)}')">${svg('edit')} แก้รอบ</button>
          <button class="btn btn-danger btn-sm" onclick="deleteRoundPrompt('${esc(r.roundId)}')">${svg('trash')} ลบรอบ</button>`
-      : `<button class="btn btn-ghost btn-sm" onclick="unlockPurchase()">${svg('lock')} ปลดล็อกเพื่อแก้ไข</button>`}
+      : ''}
     <button class="btn btn-accent" onclick="printRound()">${svg('printer')} พิมพ์รอบนี้</button>
   </div>
 
@@ -728,6 +762,223 @@ function groupAddForm(r, gid) {
 }
 
 /* ============================================================
+   MODULE 3: ROOMS (ห้องพัก) — dual-entry maid/plug + เทียบ
+   ============================================================ */
+const SRC_LABEL = { maid: 'แม่บ้าน', plug: 'ปลั๊ก' };
+function daysInMonth(y, m) { return new Date(y - 543, m, 0).getDate(); }
+// เรตที่มีผล ณ ปี/เดือนนั้น (ไม่มี → default 300/500)
+function roomRate(y, m) {
+  const rs = (S.data.rates || []).filter(r => r.effectiveYear < y || (r.effectiveYear === y && r.effectiveMonth <= m))
+    .sort((a, b) => a.effectiveYear !== b.effectiveYear ? a.effectiveYear - b.effectiveYear : a.effectiveMonth - b.effectiveMonth);
+  const r = rs[rs.length - 1];
+  return { temp: r ? r.tempRate : 300, overnight: r ? r.overnightRate : 500 };
+}
+function rentalCell(source, y, m, d, room) { return (S.data.rentals || []).find(r => r.source === source && r.year === y && r.month === m && r.day === d && r.room === room); }
+function roomDayTotal(source, y, m, d) {
+  const rate = roomRate(y, m); let t = 0, o = 0;
+  (S.data.rentals || []).forEach(r => { if (r.source === source && r.year === y && r.month === m && r.day === d) { t += r.temp; o += r.overnight; } });
+  return { temp: t, overnight: o, baht: t * rate.temp + o * rate.overnight };
+}
+function roomMonthTotal(source, y, m) {
+  const rate = roomRate(y, m); let t = 0, o = 0;
+  (S.data.rentals || []).forEach(r => { if (r.source === source && r.year === y && r.month === m) { t += r.temp; o += r.overnight; } });
+  return { temp: t, overnight: o, baht: t * rate.temp + o * rate.overnight };
+}
+function roomDateLabel(y, m, d) { const g = new Date(y - 543, m - 1, d); const wd = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'][g.getDay()]; return `${wd} ${d} ${MTH[m]} ${String(y).slice(-2)}`; }
+function syncLabel(s) { return { ok: 'ซิงค์แล้ว ✓', pending: 'รอบันทึก…', syncing: 'กำลังบันทึก…', offline: 'เน็ตหลุด — เก็บไว้แล้ว จะส่งเองเมื่อกลับมา' }[s] || ''; }
+
+function renderRooms() {
+  const sources = S.me ? S.me.roomsRead : ['maid', 'plug'];
+  const writeable = S.me ? S.me.roomsWrite : ['maid', 'plug'];
+  const canCmp = !HAS_BACKEND || can('compare');
+  const validSels = sources.concat(canCmp ? ['compare'] : []);
+  let sel = S.ui.roomSel;
+  if (!sel || validSels.indexOf(sel) < 0) sel = S.ui.roomSel = (writeable[0] || sources[0]);
+
+  const tabBtns = validSels.map(v => {
+    const active = v === sel ? 'active' : '';
+    const label = v === 'compare' ? `${svg('check')} เทียบ`
+      : (writeable.indexOf(v) >= 0 ? `${svg('edit')} จด: ${SRC_LABEL[v] || v}` : `${svg('user')} ดู: ${SRC_LABEL[v] || v}`);
+    return `<button class="tab ${active}" onclick="roomSelectTab('${v}')">${label}</button>`;
+  }).join('');
+  const tabs = validSels.length > 1 ? `<div class="tabs no-print">${tabBtns}</div>` : '';
+
+  if (sel === 'compare') return tabs + renderRoomsCompare();
+  return tabs + renderRoomEntry(sel, writeable.indexOf(sel) >= 0);
+}
+
+function stepperHtml(source, y, m, d, room, field, val, editable, kind) {
+  const lab = field === 'temp' ? 'ชั่วคราว' : 'ค้างคืน';
+  if (!editable) return `<span class="st-lab ${kind}">${lab}</span><span class="st-val ro">${val}</span>`;
+  return `<span class="st-lab ${kind}">${lab}</span>
+    <button class="st-btn" ${val <= 0 ? 'disabled' : ''} onclick="roomStep('${source}',${y},${m},${d},${room},'${field}',-1)" aria-label="ลด">−</button>
+    <span class="st-val">${val}</span>
+    <button class="st-btn ${kind}" ${val >= 5 ? 'disabled' : ''} onclick="roomStep('${source}',${y},${m},${d},${room},'${field}',1)" aria-label="เพิ่ม">+</button>`;
+}
+
+function renderRoomEntry(source, editable) {
+  const y = S.ui.roomY, m = S.ui.roomM, d = S.ui.roomD;
+  const rate = roomRate(y, m);
+  const dt = roomDayTotal(source, y, m, d);
+  const syncCls = S.roomSync || 'ok';
+  let rowsHtml = '';
+  for (let room = 1; room <= 12; room++) {
+    const cell = rentalCell(source, y, m, d, room);
+    const t = cell ? cell.temp : 0, o = cell ? cell.overnight : 0;
+    const bv = t * rate.temp + o * rate.overnight;
+    rowsHtml += `<div class="room-row ${t || o ? 'has' : ''}">
+      <div class="room-head"><span class="room-name">ห้อง ${room}</span><span class="room-baht">${bv ? bv.toLocaleString('th-TH') + ' ฿' : '-'}</span></div>
+      <div class="st-line">${stepperHtml(source, y, m, d, room, 'temp', t, editable, 'temp')}</div>
+      <div class="st-line">${stepperHtml(source, y, m, d, room, 'overnight', o, editable, 'night')}</div>
+    </div>`;
+  }
+  return `
+  <div class="card card-pad room-bar">
+    <div class="room-datenav">
+      <button class="btn btn-ghost btn-sm" onclick="roomShiftDay(-1)" aria-label="วันก่อน">${svg('chevL')}</button>
+      <button class="room-date" onclick="roomToday()" title="แตะเพื่อกลับมาวันนี้">${svg('calendar')} ${esc(roomDateLabel(y, m, d))}</button>
+      <button class="btn btn-ghost btn-sm" onclick="roomShiftDay(1)" aria-label="วันถัดไป">${svg('chevR')}</button>
+      <span class="room-sync ${syncCls}" id="roomSync" title="${esc(syncLabel(syncCls))}"></span>
+    </div>
+    <div class="room-who">${editable ? svg('edit') : svg('user')} ${editable ? 'กำลังจดของ' : 'กำลังดู (อ่านอย่างเดียว)'} <b>${esc(SRC_LABEL[source] || source)}</b></div>
+  </div>
+
+  <div class="room-grid">${rowsHtml}</div>
+
+  <div class="card card-pad room-foot">
+    <div class="room-foot-line"><span>${svg('calendar')} ยอดวันนี้</span><b class="num">${baht(dt.baht)}</b></div>
+    <div class="dim" style="font-size:12px">ชั่วคราว ${dt.temp} × ${fmt(rate.temp)} · ค้างคืน ${dt.overnight} × ${fmt(rate.overnight)}</div>
+  </div>
+
+  ${roomNotesPanel(source, y, m, editable)}`;
+}
+
+function roomNotesPanel(source, y, m, editable) {
+  const list = (S.data.notes || []).filter(n => n.source === source && n.year === y && n.month === m);
+  const items = list.map(n => `<div class="note-row">
+    ${editable
+      ? `<input class="input note-text" value="${esc(n.text)}" onblur="editRoomNote('${esc(n.id)}','text',this.value)">
+         <input class="input note-amt num-input" type="text" inputmode="numeric" value="${n.amount ? esc(fmt(n.amount)) : ''}" placeholder="บาท" onblur="editRoomNote('${esc(n.id)}','amount',this.value)">
+         <button class="btn btn-danger btn-sm" onclick="deleteRoomNote('${esc(n.id)}')">${svg('trash')}</button>`
+      : `<span class="note-text-ro">${esc(n.text)}</span><span class="note-amt-ro">${n.amount ? esc(baht(n.amount)) : ''}</span>`}
+  </div>`).join('');
+  return `<div class="card card-pad room-notes">
+    <div class="section-title" style="font-size:14px">${svg('edit')} หมายเหตุเดือน ${MTH_FULL[m]} ${y}</div>
+    <div class="note-list">${items || '<div class="dim" style="font-size:13px">— ยังไม่มีหมายเหตุ —</div>'}</div>
+    ${editable ? `<div class="note-add no-print">
+      <input class="input" id="noteText" placeholder="เช่น เบียร์ลีโอ 8 ขวด">
+      <input class="input num-input" id="noteAmt" type="text" inputmode="numeric" placeholder="บาท" style="max-width:96px">
+      <button class="btn btn-success btn-sm" onclick="addRoomNote('${source}',${y},${m})">${svg('plus')} เพิ่ม</button></div>` : ''}
+  </div>`;
+}
+
+function renderRoomsCompare() {
+  const y = S.ui.roomY, m = S.ui.roomM;
+  const dim = daysInMonth(y, m);
+  const diffs = [];
+  for (let d = 1; d <= dim; d++) for (let room = 1; room <= 12; room++) {
+    const a = rentalCell('maid', y, m, d, room), b = rentalCell('plug', y, m, d, room);
+    const at = a ? a.temp : 0, ao = a ? a.overnight : 0, bt = b ? b.temp : 0, bo = b ? b.overnight : 0;
+    if (at !== bt || ao !== bo) diffs.push({ d, room, at, ao, bt, bo });
+  }
+  const mt = roomMonthTotal('maid', y, m), pt = roomMonthTotal('plug', y, m);
+  const diffBaht = pt.baht - mt.baht;
+  const diffRows = diffs.map(x => `<tr>
+     <td>${x.d}</td><td class="l">ห้อง ${x.room}</td>
+     <td class="${x.at !== x.bt ? 'cmp-bad' : ''}">${x.at} / ${x.bt}</td>
+     <td class="${x.ao !== x.bo ? 'cmp-bad' : ''}">${x.ao} / ${x.bo}</td></tr>`).join('');
+  const mnotes = (S.data.notes || []).filter(n => n.source === 'maid' && n.year === y && n.month === m);
+  const pnotes = (S.data.notes || []).filter(n => n.source === 'plug' && n.year === y && n.month === m);
+  const noteList = arr => arr.length ? arr.map(n => `<li>${esc(n.text)}${n.amount ? ` · ${esc(baht(n.amount))}` : ''}</li>`).join('') : '<li class="dim">—</li>';
+  return `
+  <div class="card card-pad room-bar">
+    <div class="room-datenav">
+      <button class="btn btn-ghost btn-sm" onclick="roomShiftMonth(-1)" aria-label="เดือนก่อน">${svg('chevL')}</button>
+      <span class="room-date">${svg('calendar')} ${MTH_FULL[m]} ${y}</span>
+      <button class="btn btn-ghost btn-sm" onclick="roomShiftMonth(1)" aria-label="เดือนถัดไป">${svg('chevR')}</button>
+    </div>
+  </div>
+  <div class="card card-pad mt4">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">${svg('user')} แม่บ้าน</div><div class="kpi-value num">${baht(mt.baht)}</div><div class="kpi-sub">ชั่วคราว ${mt.temp} · ค้างคืน ${mt.overnight}</div></div>
+      <div class="kpi"><div class="kpi-label">${svg('user')} ปลั๊ก</div><div class="kpi-value num">${baht(pt.baht)}</div><div class="kpi-sub">ชั่วคราว ${pt.temp} · ค้างคืน ${pt.overnight}</div></div>
+      <div class="kpi ${diffBaht !== 0 ? 'is-danger' : 'is-success'}"><div class="kpi-label">ผลต่าง (ปลั๊ก−แม่บ้าน)</div><div class="kpi-value num">${diffBaht > 0 ? '+' : ''}${baht(diffBaht)}</div><div class="kpi-sub">${diffs.length} จุดที่ต่าง</div></div>
+    </div>
+  </div>
+  <div class="card card-pad mt4">
+    <div class="section-title" style="font-size:14px">${svg('check')} จุดที่จดไม่ตรง <span class="dim" style="font-weight:500;font-size:12px">· คอลัมน์ = แม่บ้าน / ปลั๊ก</span></div>
+    ${diffs.length ? `<div class="table-scroll mt4"><table class="data cmp-table"><thead><tr><th>วันที่</th><th class="l">ห้อง</th><th>ชั่วคราว</th><th>ค้างคืน</th></tr></thead><tbody>${diffRows}</tbody></table></div>`
+      : `<div class="empty" style="padding:28px">${svg('check')}<p><strong>ตรงกันทุกวัน 🎉</strong></p><p class="dim">ทั้งสองคนจดตรงกันหมดในเดือนนี้</p></div>`}
+  </div>
+  <div class="card card-pad mt4">
+    <div class="section-title" style="font-size:14px">${svg('edit')} หมายเหตุ — เทียบ</div>
+    <div class="cmp-notes mt4"><div><div class="dim" style="font-weight:600;margin-bottom:4px">แม่บ้าน</div><ul>${noteList(mnotes)}</ul></div><div><div class="dim" style="font-weight:600;margin-bottom:4px">ปลั๊ก</div><ul>${noteList(pnotes)}</ul></div></div>
+  </div>`;
+}
+
+/* ---- rooms handlers ---- */
+function roomSelectTab(v) { S.ui.roomSel = v; render(); }
+function roomShiftDay(delta) { const g = new Date(S.ui.roomY - 543, S.ui.roomM - 1, S.ui.roomD); g.setDate(g.getDate() + delta); S.ui.roomY = g.getFullYear() + 543; S.ui.roomM = g.getMonth() + 1; S.ui.roomD = g.getDate(); render(); }
+function roomShiftMonth(delta) { const g = new Date(S.ui.roomY - 543, S.ui.roomM - 1 + delta, 1); S.ui.roomY = g.getFullYear() + 543; S.ui.roomM = g.getMonth() + 1; render(); }
+function roomToday() { const t = todayBE(); S.ui.roomY = t.y; S.ui.roomM = t.m; S.ui.roomD = t.d; render(); }
+
+function roomStep(source, y, m, d, room, field, delta) {
+  if (!canWriteSource(source)) return;
+  const cell = rentalCell(source, y, m, d, room);
+  let t = cell ? cell.temp : 0, o = cell ? cell.overnight : 0;
+  if (field === 'temp') t = Math.max(0, Math.min(5, t + delta)); else o = Math.max(0, Math.min(5, o + delta));
+  applyRoomLocal(source, y, m, d, room, t, o);
+  queueRoom({ source, year: y, month: m, day: d, room, temp: t, overnight: o });
+  render();
+}
+function applyRoomLocal(source, y, m, d, room, t, o) {
+  S.data.rentals = S.data.rentals || [];
+  const i = S.data.rentals.findIndex(r => r.source === source && r.year === y && r.month === m && r.day === d && r.room === room);
+  if (t === 0 && o === 0) { if (i >= 0) S.data.rentals.splice(i, 1); return; }
+  if (i >= 0) { S.data.rentals[i].temp = t; S.data.rentals[i].overnight = o; }
+  else S.data.rentals.push({ id: 'local-' + uid(), source, year: y, month: m, day: d, room, temp: t, overnight: o, updatedAt: '' });
+}
+// แตะ = เซฟทันที — เก็บคิว + debounce ส่ง (กันเน็ตหลุด)
+function queueRoom(item) {
+  S.roomQueue = S.roomQueue.filter(q => !(q.source === item.source && q.year === item.year && q.month === item.month && q.day === item.day && q.room === item.room));
+  S.roomQueue.push(item); persistQueue();
+  S.roomSync = 'pending';
+  clearTimeout(S._roomT); S._roomT = setTimeout(flushRoomQueue, 600);
+}
+function persistQueue() { try { localStorage.setItem('kanda_roomq', JSON.stringify(S.roomQueue)); } catch (e) { } }
+async function flushRoomQueue() {
+  if (!HAS_BACKEND) { S.roomQueue = []; persistQueue(); S.roomSync = 'ok'; updateSyncDot(); return; }
+  if (S._roomFlushing || !S.roomQueue.length) return;
+  S._roomFlushing = true; S.roomSync = 'syncing'; updateSyncDot();
+  try {
+    while (S.roomQueue.length) { await api.call('setRoom', S.roomQueue[0]); S.roomQueue.shift(); persistQueue(); }
+    S.roomSync = 'ok';
+  } catch (e) { S.roomSync = 'offline'; }
+  finally {
+    S._roomFlushing = false; updateSyncDot();
+    if (S.roomQueue.length) { clearTimeout(S._roomT); S._roomT = setTimeout(flushRoomQueue, 5000); }   // เน็ตหลุด → ลองใหม่
+  }
+}
+function updateSyncDot() { const el = $('#roomSync'); if (el) { el.className = 'room-sync ' + (S.roomSync || 'ok'); el.title = syncLabel(S.roomSync || 'ok'); } }
+
+function addRoomNote(source, y, m) {
+  if (!canWriteSource(source)) return;
+  const text = ($('#noteText').value || '').trim(); if (!text) { toast('ใส่ข้อความก่อน', 'err'); return; }
+  const amount = num($('#noteAmt').value);
+  withBusy(null, async () => { await api.post('addNote', { source, year: y, month: m, text, amount }); toast('เพิ่มหมายเหตุแล้ว', 'ok'); render(); });
+}
+function editRoomNote(id, field, val) {
+  const n = (S.data.notes || []).find(x => x.id === id); if (!n) return;
+  const v = field === 'amount' ? num(val) : String(val).trim();
+  if (n[field] === v) return;
+  n[field] = v;
+  withBusy(null, async () => { await api.post('updateNote', { id, field, value: v }); softRender(); });
+}
+function deleteRoomNote(id) {
+  confirmDialog('ลบหมายเหตุนี้?', async () => { await api.post('deleteNote', { id }); toast('ลบแล้ว', 'ok'); render(); });
+}
+
+/* ============================================================
    Shared bits
    ============================================================ */
 function panelEmpty(icon, title, sub) {
@@ -774,29 +1025,31 @@ function startPolling() {
   _pollTimer = setInterval(pollOnce, 10000);
 }
 async function pollOnce() {
-  // หยุดถ้า: ยังไม่ล็อกอิน / แท็บไม่ได้โฟกัส / กำลังบันทึก / เปิด modal / กำลังพิมพ์ในช่อง
-  if (!S.auth.entry || document.hidden || S._busy) return;
+  // หยุดถ้า: ยังไม่ล็อกอิน / แท็บไม่ได้โฟกัส / กำลังบันทึก / เปิด modal / กำลังพิมพ์ / มีคิวห้องพักค้าง (กันทับงานที่ยังไม่ส่ง)
+  if (!loggedIn() || document.hidden || S._busy || S.roomQueue.length) return;
   if ($('#modalBg').classList.contains('show')) return;
   const ae = document.activeElement;
   if (ae && (ae.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(ae.tagName))) return;
   try {
-    const fresh = await api.getAll();
-    if (JSON.stringify(fresh) !== JSON.stringify(S.data)) { S.data = fresh; render(); }
+    const { data, me } = await api.getAll();
+    if (me) S.me = me;
+    if (JSON.stringify(data) !== JSON.stringify(S.data)) { S.data = data; render(); }
   } catch (e) { /* เงียบไว้ ครั้งหน้าค่อยลองใหม่ */ }
 }
 
 /* module switching */
 $('#moduleSeg').addEventListener('click', e => {
-  if (HAS_BACKEND && !S.auth.entry) return;   // ยังไม่ล็อกอิน → ไม่สลับโมดูล
-  const b = e.target.closest('button'); if (!b) return;
+  if (HAS_BACKEND && !loggedIn()) return;   // ยังไม่ล็อกอิน → ไม่สลับโมดูล
+  const b = e.target.closest('button'); if (!b || b.hidden) return;
+  if (!allowedModules().includes(b.dataset.module)) return;
   S.module = b.dataset.module; S.ui.roundId = null; S.ui.catalog = false;
   localStorage.setItem('kanda_module', S.module);   // จำแท็บล่าสุด
   render();
 });
 /* lock / logout */
 $('#lockBtn').addEventListener('click', () => {
-  S.auth = { entry: false, purch: false }; S.entryPin = ''; S.purchPin = '';
-  localStorage.removeItem('kanda_entry'); localStorage.removeItem('kanda_purch');
+  S.me = null; S.pin = '';
+  localStorage.removeItem('kanda_pin');
   entryGate();
 });
 $('#themeBtn').addEventListener('click', () => {
@@ -830,42 +1083,21 @@ function entryGate() {
 }
 async function submitEntry() {
   const v = $('#entryIn').value.trim(); if (!v) return;
-  S.entryPin = v;
+  S.pin = v;
   let ok = false;
   await withBusy('entryBtn', async () => {
-    S.data = await api.getAll();   // getAll ฝั่ง server ตรวจรหัสเข้าเว็บ
+    const { data, me } = await api.getAll();   // server ตรวจ PIN → คืน role/caps
+    S.data = data; S.me = me;
     ok = true;
   }, 'กำลังเข้าสู่ระบบ').catch(() => { });
   if (ok) {
-    localStorage.setItem('kanda_entry', v);
-    S.auth.entry = true; toast('เข้าสู่ระบบแล้ว', 'ok'); render(); startPolling();
+    localStorage.setItem('kanda_pin', v);
+    S.ui.roomSel = null;
+    toast('เข้าสู่ระบบแล้ว' + (S.me && S.me.label ? ' · ' + S.me.label : ''), 'ok');
+    render(); startPolling(); flushRoomQueue();
   } else {
-    S.entryPin = ''; S.loading = false;
+    S.pin = ''; S.loading = false;
     const e = $('#entryErr'); if (e) e.style.display = 'block';
-  }
-}
-
-/* ---- PURCHASE unlock (รหัสที่ 2 — แก้สั่งซื้อ) ---- */
-function unlockPurchase() {
-  openModal(`<h3>${svg('lock')} ปลดล็อกการแก้ไขหน้าสั่งซื้อ</h3>
-    <p class="muted" style="font-size:13px;margin-bottom:12px">ต้องใช้รหัสผ่านชุดที่ 2 สำหรับแก้ไข/อัปเดตรายการสั่งซื้อ</p>
-    <div class="field"><label>รหัสผ่าน (ชุดที่ 2)</label>
-      <input class="input pin-input" id="purchIn" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" onkeydown="if(event.key==='Enter')submitPurch()"></div>
-    <div class="field-error" id="purchErr" style="display:none">รหัสไม่ถูกต้อง</div>
-    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
-      <button class="btn btn-primary" id="purchBtn" onclick="submitPurch()">ปลดล็อก</button></div>`);
-  setTimeout(() => $('#purchIn') && $('#purchIn').focus(), 60);
-}
-async function submitPurch() {
-  const v = $('#purchIn').value.trim(); if (!v) return;
-  S.purchPin = v;
-  let ok = false;
-  await withBusy('purchBtn', async () => { const r = await api.post('verifyPurch'); ok = r.ok; }).catch(() => { });
-  if (ok) {
-    localStorage.setItem('kanda_purch', v);
-    S.auth.purch = true; closeModal(); toast('ปลดล็อกแล้ว — แก้ไขสั่งซื้อได้', 'ok'); render();
-  } else {
-    S.purchPin = ''; const e = $('#purchErr'); if (e) e.style.display = 'block';
   }
 }
 
@@ -982,7 +1214,7 @@ function armProductPaste(productId) {
   $$('.catalog-row').forEach(r => r.classList.toggle('armed', r.dataset.pid === productId));
 }
 async function handlePaste(e) {
-  if (!S.auth.purch || S.module !== 'purchase') return;
+  if (!can('purchaseWrite') || S.module !== 'purchase') return;
   const inCatalog = S.ui.catalog;
   if (!inCatalog && !S.ui.roundId) return;
   const list = (e.clipboardData && e.clipboardData.items) || [];
@@ -1301,19 +1533,19 @@ function printRound() {
 async function boot() {
   // No backend → demo preview, no gate
   if (!HAS_BACKEND) {
-    S.auth = { entry: true, purch: true };
+    S.me = demoMe();
     S.loading = true; render();
-    try { S.data = await api.getAll(); } catch (e) { S.error = e.message; }
+    try { const r = await api.getAll(); S.data = r.data; } catch (e) { S.error = e.message; }
     S.loading = false; render();
     return;
   }
-  // Backend → try restoring saved entry pin from this session
-  if (S.entryPin) {
+  // Backend → ลองกู้ PIN ที่จำไว้
+  if (S.pin) {
     showLoader('กำลังโหลดข้อมูลจาก Google Sheet');
-    try { S.data = await api.getAll(); S.auth.entry = true; if (S.purchPin) S.auth.purch = true; }
-    catch (e) { S.entryPin = ''; S.purchPin = ''; localStorage.removeItem('kanda_entry'); localStorage.removeItem('kanda_purch'); }
+    try { const { data, me } = await api.getAll(); S.data = data; S.me = me; }
+    catch (e) { S.pin = ''; S.me = null; localStorage.removeItem('kanda_pin'); }
   }
-  if (S.auth.entry) { render(); startPolling(); } else entryGate();
+  if (S.me) { render(); startPolling(); flushRoomQueue(); } else entryGate();
 }
 
 /* expose handlers used in inline HTML */
@@ -1324,14 +1556,27 @@ Object.assign(window, {
   addGroup, deleteGroupPrompt, dragItem, dragOver, dragLeave, dropItem, armPaste, lightbox, toggleRoundDone, editRoundPrompt, confirmEditRound, pickRoundImage, deleteRoundImage,
   prodAuto, prodPick, prodHide, prodAddNew, openCatalog, closeCatalog, addProductPrompt, confirmAddProduct,
   updateProduct, deleteProductPrompt, pickProductImage, deleteProductImage, armProductPaste,
-  printUtility, printRound, submitEntry, submitPurch, unlockPurchase, closeModal,
+  printUtility, printRound, submitEntry, closeModal,
+  roomSelectTab, roomShiftDay, roomShiftMonth, roomToday, roomStep, addRoomNote, editRoomNote, deleteRoomNote,
 });
 
 /* ============================================================
    DEMO data (used only when backend not configured)
    ============================================================ */
+function demoMe() {
+  return { role: 'owner', label: 'เจ้าของ (เดโม)', caps: { utilityRead: 1, utilityWrite: 1, purchaseRead: 1, purchaseWrite: 1, purchaseDone: 1, rooms: 1, compare: 1, rates: 1 }, roomsRead: ['maid', 'plug'], roomsWrite: ['maid', 'plug'] };
+}
 function demoData() {
+  const t = todayBE();
   return {
+    rates: [{ effectiveYear: 2569, effectiveMonth: 1, tempRate: 300, overnightRate: 500 }],
+    rentals: [
+      { id: 'rt1', source: 'maid', year: t.y, month: t.m, day: t.d, room: 2, temp: 0, overnight: 1, updatedAt: '' },
+      { id: 'rt2', source: 'maid', year: t.y, month: t.m, day: t.d, room: 3, temp: 2, overnight: 0, updatedAt: '' },
+      { id: 'rt3', source: 'plug', year: t.y, month: t.m, day: t.d, room: 2, temp: 0, overnight: 1, updatedAt: '' },
+      { id: 'rt4', source: 'plug', year: t.y, month: t.m, day: t.d, room: 3, temp: 1, overnight: 0, updatedAt: '' },
+    ],
+    notes: [{ id: 'n1', source: 'maid', year: t.y, month: t.m, text: 'เบียร์ลีโอ 8 ขวด', amount: 640, updatedAt: '' }],
     workers: [{ name: 'คนงาน 1', elecRate: 7, waterRate: 30 }],
     bills: [
       { id: 'b1', worker: 'คนงาน 1', year: 2569, month: 1, rent: 2000, eOld: 100, eNew: 145, wOld: 20, wNew: 24, extra: 0, note: '', paid: true },
