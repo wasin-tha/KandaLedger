@@ -115,6 +115,7 @@ const api = {
     if (!j.ok) throw new Error(j.error || 'request failed');
     if (j.data) S.data = j.data;
     if (j.me) S.me = j.me;
+    S._mutSeq = (S._mutSeq || 0) + 1;   // มีการแก้ข้อมูล → กัน poll เก่าทับ (ทุกโมดูล)
     return j;
   },
   // เรียกแบบไม่มี side-effect ต่อ S.data (ใช้กับ autosave ห้องพัก ที่จัดการ state เองแบบ optimistic)
@@ -978,7 +979,7 @@ function roomStep(source, y, m, d, room, field, delta) {
   let t = cell ? cell.temp : 0, o = cell ? cell.overnight : 0;
   if (field === 'temp') t = Math.max(0, Math.min(5, t + delta)); else o = Math.max(0, Math.min(5, o + delta));
   applyRoomLocal(source, y, m, d, room, t, o);
-  S._roomSeq = (S._roomSeq || 0) + 1;   // มาร์คว่ามีการแก้ห้อง — กัน poll เก่าทับ
+  S._mutSeq = (S._mutSeq || 0) + 1;   // มาร์คว่ามีการแก้ — กัน poll เก่าทับ (กลไกกลาง ใช้ร่วมทั้งเว็บ)
   queueRoom({ source, year: y, month: m, day: d, room, temp: t, overnight: o });
   render();
 }
@@ -1086,11 +1087,11 @@ async function pollOnce() {
   if ($('#modalBg').classList.contains('show')) return;
   const ae = document.activeElement;
   if (ae && (ae.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(ae.tagName))) return;
-  const seq = S._roomSeq || 0;   // จับ seq ก่อนยิง getAll
+  const seq = S._mutSeq || 0;   // จับ seq กลางก่อนยิง getAll
   try {
     const { data, me } = await api.getAll();
-    // ระหว่างรอ getAll ถ้ามีการแก้ห้อง/มีคิว/กำลัง flush → ทิ้งผลนี้ (กันข้อมูลเก่าทับค่าที่เพิ่งกด = เด้งกลับ)
-    if (S.roomQueue.length || S._roomFlushing || (S._roomSeq || 0) !== seq) return;
+    // ระหว่างรอ getAll ถ้ามีการแก้อะไรก็ตาม (บิล/สินค้า/รอบ/ห้อง) / กำลังบันทึก / มีคิว → ทิ้งผลนี้ (กันข้อมูลเก่าทับ = เด้งกลับ)
+    if (S._busy || S.roomQueue.length || S._roomFlushing || (S._mutSeq || 0) !== seq) return;
     if (me) S.me = me;
     if (JSON.stringify(data) !== JSON.stringify(S.data)) { S.data = data; render(); }
   } catch (e) { /* เงียบไว้ ครั้งหน้าค่อยลองใหม่ */ }
