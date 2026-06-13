@@ -605,8 +605,33 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .note-add { display: flex; gap: 6px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
 .note-add .input:first-child { flex: 1; min-width: 140px; }
 
-.cmp-table td { font-variant-numeric: tabular-nums; }
-.cmp-table .cmp-bad { color: var(--danger); font-weight: 700; background: var(--danger-50); }
+/* หน้าเทียบ — รายวัน + กางดูห้อง */
+.cmp-filter { font-size: 13px; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.cmp-filter input { width: 16px; height: 16px; }
+.cmp-head, .cmp-row { display: grid; grid-template-columns: 1.05fr 1fr 1fr 1.35fr; align-items: center; gap: 8px; }
+.cmp-head { padding: 8px 10px; margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--text-3); border-bottom: 1px solid var(--border); }
+.cmp-head span:not(:first-child) { text-align: right; }
+.cmp-day { border-bottom: 1px solid var(--border); }
+.cmp-row { padding: 9px 10px; }
+.cmp-day.conflict { background: var(--danger-50); }
+.cmp-day.conflict .cmp-row { cursor: pointer; }
+.cmp-day:hover .cmp-row { background: var(--surface-2); }
+.cmp-day.conflict:hover .cmp-row { background: var(--danger-50); filter: brightness(.98); }
+.cmp-d { font-weight: 600; font-size: 14px; white-space: nowrap; }
+.cmp-side { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.2; justify-self: end; }
+.cmp-side .num { font-size: 14px; font-weight: 700; }
+.cmp-cnt { font-size: 11px; color: var(--text-3); }
+.cmp-none { color: var(--text-3); justify-self: end; }
+.cmp-st { justify-self: end; text-align: right; }
+.cmp-badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+.cmp-badge.ok { color: var(--success); background: var(--success-50); }
+.cmp-badge.conflict { color: var(--danger); background: var(--surface); border: 1px solid var(--danger); }
+.cmp-badge.solo { color: var(--text-2); background: var(--surface-3); }
+.cmp-rooms { padding: 2px 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.cmp-room { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 13px; padding: 6px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+.cmp-rn { font-weight: 600; }
+.cmp-m { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.cmp-m.bad { color: var(--danger); font-weight: 700; }
 .cmp-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .cmp-notes ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 .cmp-notes li.dim { list-style: none; margin-left: -18px; }
