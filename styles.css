@@ -605,27 +605,40 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .cmp-notes ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 .cmp-notes li.dim { list-style: none; margin-left: -18px; }
 
-/* ตารางสรุปรายเดือน + accordion จด */
-.room-month { width: 100%; }
-.room-month th, .room-month td { text-align: center; padding: 11px 10px; }
-.room-month th.l, .room-month td.l { text-align: left; }
-.room-month thead th { font-size: 13px; }
-.drow { cursor: pointer; transition: background .12s; }
-.drow:hover td { background: var(--surface-2); }
-.drow.today td { background: var(--primary-50); }
-.drow.open td { background: var(--surface-3); }
-.dcell-day { white-space: nowrap; font-weight: 600; font-size: 15px; }
-.dcell { font-variant-numeric: tabular-nums; color: var(--text-3); font-size: 15px; }
-.dcell.tt { color: var(--accent); font-weight: 700; }
-.dcell.nn { color: var(--success); font-weight: 700; }
-.dcell.dbaht { color: var(--text); font-weight: 600; }
-.drow.open .dcell, .drow.open .dcell-day { color: var(--text); }
-.room-month .badge { font-size: 10px; padding: 1px 6px; }
-.day-edit > td { padding: 0 !important; background: var(--surface-2); border-bottom: 2px solid var(--border-strong); }
-.day-edit-inner { padding: 12px 12px 14px; }
-.day-edit-head { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; color: var(--primary); margin-bottom: 10px; }
-.day-edit-head svg { width: 15px; height: 15px; }
-.day-edit .room-row { background: var(--surface); }
+/* ปฏิทินสรุปรายเดือน + ช่องจดใต้ปฏิทิน */
+.cdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; margin-right: 3px; flex: 0 0 auto; }
+.cdot.t { background: var(--accent); }
+.cdot.n { background: var(--success); }
+.cal-legend { display: flex; gap: 14px; margin-top: 10px; font-size: 12.5px; color: var(--text-2); flex-wrap: wrap; align-items: center; }
+.cal-legend .cal-bk { font-weight: 600; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-head { margin-bottom: 6px; }
+.cal-wd { text-align: center; font-size: 12px; font-weight: 600; color: var(--text-3); padding: 2px 0; }
+.cal-cell { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 6px 4px; min-height: 76px; display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; font: inherit; transition: border-color .12s, background .12s; }
+.cal-cell.empty { border: none; background: transparent; cursor: default; min-height: 0; }
+.cal-cell:not(.empty):hover { border-color: var(--border-strong); background: var(--surface-2); }
+.cal-cell.has { border-color: var(--border-strong); }
+.cal-cell.sel { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-50); }
+.cal-day { font-weight: 700; font-size: 14px; color: var(--text); align-self: flex-start; padding-left: 2px; }
+.cal-cell.today .cal-day { background: var(--primary); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; padding: 0; }
+.cal-n { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; display: inline-flex; align-items: center; }
+.cal-n.t { color: var(--accent); }
+.cal-n.n { color: var(--success); }
+.cal-b { font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.cal-empty { color: var(--text-3); margin-top: 10px; }
+@media (max-width: 480px) {
+  .cal-grid { gap: 3px; }
+  .cal-cell { min-height: 66px; padding: 4px 2px; border-radius: 8px; }
+  .cal-day { font-size: 12px; }
+  .cal-cell.today .cal-day { width: 19px; height: 19px; font-size: 11px; }
+  .cal-n { font-size: 11.5px; }
+  .cal-b { font-size: 10px; }
+  .cal-legend { gap: 10px; font-size: 11.5px; }
+  .cal-wd { font-size: 11px; }
+}
+/* ช่องจดใต้ปฏิทิน (reuse stepper) */
+.day-edit-head { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; color: var(--primary); margin-bottom: 10px; }
+.day-edit-head svg { width: 16px; height: 16px; }
 .day-edit-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
 .day-edit-foot span { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text-2); }
 .day-edit-foot svg { width: 15px; height: 15px; }

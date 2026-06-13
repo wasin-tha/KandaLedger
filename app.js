@@ -817,7 +817,7 @@ function stepperHtml(source, y, m, d, room, field, val, editable, kind) {
     <button class="st-btn ${kind}" ${val >= 5 ? 'disabled' : ''} onclick="roomStep('${source}',${y},${m},${d},${room},'${field}',1)" aria-label="เพิ่ม">+</button>`;
 }
 
-// หน้าจด = ตารางสรุปทั้งเดือน (เหมือนคอลัมน์สรุปในชีท) + แตะวัน = กางช่องจด 12 ห้อง (accordion)
+// หน้าจด = ปฏิทินทั้งเดือน (ช่องสรุป 3 ตัวเลข + จุดสี) + แตะวัน = ช่องจด 12 ห้องโผล่ใต้ปฏิทิน
 function renderRoomEntry(source, editable) {
   const y = S.ui.roomY, m = S.ui.roomM;
   const dim = daysInMonth(y, m);
@@ -828,23 +828,28 @@ function renderRoomEntry(source, editable) {
   const openDay = S.ui.roomD;
   const syncCls = S.roomSync || 'ok';
 
-  let body = '';
+  // ช่องว่างนำหน้าวันที่ 1 (จันทร์ขึ้นต้นสัปดาห์)
+  const lead = (new Date(y - 543, m - 1, 1).getDay() + 6) % 7;
+  let cells = '';
+  for (let i = 0; i < lead; i++) cells += `<div class="cal-cell empty"></div>`;
   for (let d = 1; d <= dim; d++) {
     const dt = roomDayTotal(source, y, m, d);
     const has = dt.temp || dt.overnight;
     const isToday = isCurMonth && d === t.d;
-    const isOpen = d === openDay;
-    body += `<tr id="dayrow-${d}" class="drow ${isToday ? 'today' : ''} ${isOpen ? 'open' : ''}" onclick="roomToggleDay(${d})">
-      <td class="l dcell-day">${isOpen ? '▾' : '▸'} ${d}${isToday ? ' <span class="badge paid">วันนี้</span>' : ''}</td>
-      <td class="dcell ${dt.temp ? 'tt' : ''}">${has ? dt.temp : '−'}</td>
-      <td class="dcell ${dt.overnight ? 'nn' : ''}">${has ? dt.overnight : '−'}</td>
-      <td class="dcell dbaht">${has ? fmt(dt.baht) + ' ฿' : '−'}</td>
-    </tr>`;
-    if (isOpen) body += `<tr class="day-edit"><td colspan="4">${roomEditorHtml(source, y, m, d, editable, rate)}</td></tr>`;
+    const isSel = d === openDay;
+    cells += `<button class="cal-cell ${has ? 'has' : ''} ${isToday ? 'today' : ''} ${isSel ? 'sel' : ''}" onclick="roomToggleDay(${d})">
+      <span class="cal-day">${d}</span>
+      ${has
+        ? `<span class="cal-n t"><i class="cdot t"></i>${dt.temp}</span><span class="cal-n n"><i class="cdot n"></i>${dt.overnight}</span><span class="cal-b">${fmt(dt.baht)}</span>`
+        : `<span class="cal-empty">−</span>`}
+    </button>`;
   }
-  // เลื่อนจอมาที่วันที่กางอยู่ (เฉพาะตอนสั่งเปิด ไม่ใช่ทุก re-render เวลาแตะ stepper)
+  const wd = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'].map(w => `<div class="cal-wd">${w}</div>`).join('');
+  const editor = (openDay && openDay <= dim)
+    ? `<div id="dayEditor" class="card card-pad mt4">${roomEditorHtml(source, y, m, openDay, editable, rate)}</div>` : '';
+  // แตะวัน → เลื่อนจอมาที่ช่องจด (ไม่เลื่อนทุก re-render เวลาแตะ stepper)
   if (S._roomWantScroll && openDay) {
-    setTimeout(() => { const el = document.getElementById('dayrow-' + openDay); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 40);
+    setTimeout(() => { const el = document.getElementById('dayEditor'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 40);
     S._roomWantScroll = false;
   }
 
@@ -857,15 +862,15 @@ function renderRoomEntry(source, editable) {
       <span class="room-sync ${syncCls}" id="roomSync" title="${esc(syncLabel(syncCls))}"></span>
     </div>
     <div class="room-who">${editable ? svg('edit') : svg('user')} ${editable ? 'กำลังจดของ' : 'กำลังดู (อ่านอย่างเดียว)'} <b>${esc(SRC_LABEL[source] || source)}</b> · ยอดเดือน <b class="num" style="color:var(--primary)">${baht(mt.baht)}</b></div>
+    <div class="cal-legend"><span><i class="cdot t"></i> ชั่วคราว</span><span><i class="cdot n"></i> ค้างคืน</span><span class="cal-bk">฿ ยอด</span></div>
   </div>
 
-  <div class="card mt4">
-    <div class="table-scroll"><table class="data room-month">
-      <thead><tr><th class="l">วันที่</th><th>ชั่วคราว</th><th>ค้างคืน</th><th>ยอด</th></tr></thead>
-      <tbody>${body}</tbody>
-    </table></div>
+  <div class="card card-pad mt4">
+    <div class="cal-grid cal-head">${wd}</div>
+    <div class="cal-grid">${cells}</div>
   </div>
 
+  ${editor}
   ${roomNotesPanel(source, y, m, editable)}`;
 }
 
@@ -955,8 +960,8 @@ function renderRoomsCompare() {
 
 /* ---- rooms handlers ---- */
 function roomSelectTab(v) { S.ui.roomSel = v; render(); }
-// แตะวัน = กาง/ปิดช่องจด (เปิดวันใหม่ = ปิดวันเก่าอัตโนมัติ)
-function roomToggleDay(d) { S.ui.roomD = (S.ui.roomD === d ? null : d); S._roomWantScroll = S.ui.roomD != null; render(); }
+// แตะวันในปฏิทิน = เลือกวันนั้น → ช่องจดโผล่ใต้ปฏิทิน + เลื่อนจอลงมา
+function roomToggleDay(d) { S.ui.roomD = d; S._roomWantScroll = true; render(); }
 function roomShiftMonth(delta) {
   const g = new Date(S.ui.roomY - 543, S.ui.roomM - 1 + delta, 1);
   S.ui.roomY = g.getFullYear() + 543; S.ui.roomM = g.getMonth() + 1;
