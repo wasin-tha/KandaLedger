@@ -573,9 +573,9 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 /* ช่องจดในวัน — 1 บรรทัด/ห้อง (จอกว้าง 2 ห้อง/แถว, จอแคบ 1 ห้อง/แถว) */
 .room-lines { display: grid; grid-template-columns: 1fr; gap: 1px; }
 @media (min-width: 600px) { .room-lines { grid-template-columns: 1fr 1fr; column-gap: 22px; } }
-.room-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 6px; border-radius: 8px; }
+.room-line { display: flex; align-items: center; justify-content: flex-start; gap: 18px; padding: 5px 8px; border-radius: 8px; }
 .room-line.has { background: var(--surface-2); }
-.rl-name { font-weight: 600; font-size: 14px; white-space: nowrap; color: var(--text-2); }
+.rl-name { font-weight: 600; font-size: 14px; white-space: nowrap; color: var(--text-2); min-width: 58px; }
 .room-line.has .rl-name { color: var(--text); font-weight: 700; }
 .rl-steps { display: flex; align-items: center; gap: 14px; }
 .rl-stat { display: inline-flex; align-items: center; gap: 5px; }
