@@ -496,6 +496,13 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .print-only { display: none; }
 @media print {
   @page { size: A4 portrait; margin: 12mm 12mm; }
+  /* บังคับสีโทนสว่างตอนพิมพ์ แม้เปิดธีมมืด — ไม่งั้น var(--text) เป็นสีอ่อน อ่านไม่ออกบนพื้นขาว */
+  [data-theme="dark"] {
+    --text: #0F172A; --text-2: #334155; --text-3: #64748B;
+    --surface: #FFFFFF; --surface-2: #F8FAFC; --surface-3: #EEF3FA;
+    --border: #CBD5E1; --border-strong: #94A3B8;
+    --primary: #1E40AF; --secondary: #2563EB; --accent: #D97706; --success: #15803D; --danger: #B91C1C;
+  }
   body { background: #fff; color: #000; font-size: 11px; }
   .app-header, .seg, .toolbar, .btn, .tabs, .round-grid, .toast-wrap, .modal-bg, .no-print, .theme-toggle { display: none !important; }
   main#view { display: none !important; }
