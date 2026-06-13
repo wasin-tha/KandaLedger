@@ -589,12 +589,6 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .st-val { min-width: 26px; text-align: center; font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; }
 .st-val.ro { min-width: 32px; color: var(--text-2); }
 
-.room-foot { margin-top: var(--s4); position: sticky; bottom: 8px; z-index: 4; }
-.room-foot-line { display: flex; align-items: center; justify-content: space-between; }
-.room-foot-line span { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text-2); }
-.room-foot-line svg { width: 16px; height: 16px; }
-.room-foot-line b { font-size: 22px; color: var(--primary); font-variant-numeric: tabular-nums; }
-
 .room-notes { margin-top: var(--s4); }
 .note-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .note-row { display: flex; gap: 6px; align-items: center; }
@@ -610,3 +604,29 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .cmp-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .cmp-notes ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 .cmp-notes li.dim { list-style: none; margin-left: -18px; }
+
+/* ตารางสรุปรายเดือน + accordion จด */
+.room-month { width: 100%; }
+.room-month th, .room-month td { text-align: center; padding: 11px 10px; }
+.room-month th.l, .room-month td.l { text-align: left; }
+.room-month thead th { font-size: 13px; }
+.drow { cursor: pointer; transition: background .12s; }
+.drow:hover td { background: var(--surface-2); }
+.drow.today td { background: var(--primary-50); }
+.drow.open td { background: var(--surface-3); }
+.dcell-day { white-space: nowrap; font-weight: 600; font-size: 15px; }
+.dcell { font-variant-numeric: tabular-nums; color: var(--text-3); font-size: 15px; }
+.dcell.tt { color: var(--accent); font-weight: 700; }
+.dcell.nn { color: var(--success); font-weight: 700; }
+.dcell.dbaht { color: var(--text); font-weight: 600; }
+.drow.open .dcell, .drow.open .dcell-day { color: var(--text); }
+.room-month .badge { font-size: 10px; padding: 1px 6px; }
+.day-edit > td { padding: 0 !important; background: var(--surface-2); border-bottom: 2px solid var(--border-strong); }
+.day-edit-inner { padding: 12px 12px 14px; }
+.day-edit-head { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; color: var(--primary); margin-bottom: 10px; }
+.day-edit-head svg { width: 15px; height: 15px; }
+.day-edit .room-row { background: var(--surface); }
+.day-edit-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.day-edit-foot span { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text-2); }
+.day-edit-foot svg { width: 15px; height: 15px; }
+.day-edit-foot b { font-size: 19px; color: var(--primary); font-variant-numeric: tabular-nums; }

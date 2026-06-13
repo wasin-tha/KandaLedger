@@ -71,6 +71,7 @@ const S = {
   },
   roomQueue: [],                  // คิว setRoom ที่รอส่ง (กันเน็ตหลุด)
   roomSync: 'ok',                 // ok | pending | syncing | offline
+  _roomWantScroll: true,          // เลื่อนจอมาที่วันนี้ครั้งแรกที่เปิดหน้าจด
   loading: false,
   error: '',
 };
@@ -816,41 +817,77 @@ function stepperHtml(source, y, m, d, room, field, val, editable, kind) {
     <button class="st-btn ${kind}" ${val >= 5 ? 'disabled' : ''} onclick="roomStep('${source}',${y},${m},${d},${room},'${field}',1)" aria-label="เพิ่ม">+</button>`;
 }
 
+// หน้าจด = ตารางสรุปทั้งเดือน (เหมือนคอลัมน์สรุปในชีท) + แตะวัน = กางช่องจด 12 ห้อง (accordion)
 function renderRoomEntry(source, editable) {
-  const y = S.ui.roomY, m = S.ui.roomM, d = S.ui.roomD;
+  const y = S.ui.roomY, m = S.ui.roomM;
+  const dim = daysInMonth(y, m);
   const rate = roomRate(y, m);
-  const dt = roomDayTotal(source, y, m, d);
+  const mt = roomMonthTotal(source, y, m);
+  const t = todayBE();
+  const isCurMonth = (y === t.y && m === t.m);
+  const openDay = S.ui.roomD;
   const syncCls = S.roomSync || 'ok';
-  let rowsHtml = '';
-  for (let room = 1; room <= 12; room++) {
-    const cell = rentalCell(source, y, m, d, room);
-    const t = cell ? cell.temp : 0, o = cell ? cell.overnight : 0;
-    const bv = t * rate.temp + o * rate.overnight;
-    rowsHtml += `<div class="room-row ${t || o ? 'has' : ''}">
-      <div class="room-head"><span class="room-name">ห้อง ${room}</span><span class="room-baht">${bv ? bv.toLocaleString('th-TH') + ' ฿' : '-'}</span></div>
-      <div class="st-line">${stepperHtml(source, y, m, d, room, 'temp', t, editable, 'temp')}</div>
-      <div class="st-line">${stepperHtml(source, y, m, d, room, 'overnight', o, editable, 'night')}</div>
-    </div>`;
+
+  let body = '';
+  for (let d = 1; d <= dim; d++) {
+    const dt = roomDayTotal(source, y, m, d);
+    const has = dt.temp || dt.overnight;
+    const isToday = isCurMonth && d === t.d;
+    const isOpen = d === openDay;
+    body += `<tr id="dayrow-${d}" class="drow ${isToday ? 'today' : ''} ${isOpen ? 'open' : ''}" onclick="roomToggleDay(${d})">
+      <td class="l dcell-day">${isOpen ? '▾' : '▸'} ${d}${isToday ? ' <span class="badge paid">วันนี้</span>' : ''}</td>
+      <td class="dcell ${dt.temp ? 'tt' : ''}">${has ? dt.temp : '−'}</td>
+      <td class="dcell ${dt.overnight ? 'nn' : ''}">${has ? dt.overnight : '−'}</td>
+      <td class="dcell dbaht">${has ? fmt(dt.baht) + ' ฿' : '−'}</td>
+    </tr>`;
+    if (isOpen) body += `<tr class="day-edit"><td colspan="4">${roomEditorHtml(source, y, m, d, editable, rate)}</td></tr>`;
   }
+  // เลื่อนจอมาที่วันที่กางอยู่ (เฉพาะตอนสั่งเปิด ไม่ใช่ทุก re-render เวลาแตะ stepper)
+  if (S._roomWantScroll && openDay) {
+    setTimeout(() => { const el = document.getElementById('dayrow-' + openDay); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 40);
+    S._roomWantScroll = false;
+  }
+
   return `
   <div class="card card-pad room-bar">
     <div class="room-datenav">
-      <button class="btn btn-ghost btn-sm" onclick="roomShiftDay(-1)" aria-label="วันก่อน">${svg('chevL')}</button>
-      <button class="room-date" onclick="roomToday()" title="แตะเพื่อกลับมาวันนี้">${svg('calendar')} ${esc(roomDateLabel(y, m, d))}</button>
-      <button class="btn btn-ghost btn-sm" onclick="roomShiftDay(1)" aria-label="วันถัดไป">${svg('chevR')}</button>
+      <button class="btn btn-ghost btn-sm" onclick="roomShiftMonth(-1)" aria-label="เดือนก่อน">${svg('chevL')}</button>
+      <button class="room-date" onclick="roomToday()" title="แตะเพื่อกลับมาเดือน/วันนี้">${svg('calendar')} ${MTH_FULL[m]} ${y}</button>
+      <button class="btn btn-ghost btn-sm" onclick="roomShiftMonth(1)" aria-label="เดือนถัดไป">${svg('chevR')}</button>
       <span class="room-sync ${syncCls}" id="roomSync" title="${esc(syncLabel(syncCls))}"></span>
     </div>
-    <div class="room-who">${editable ? svg('edit') : svg('user')} ${editable ? 'กำลังจดของ' : 'กำลังดู (อ่านอย่างเดียว)'} <b>${esc(SRC_LABEL[source] || source)}</b></div>
+    <div class="room-who">${editable ? svg('edit') : svg('user')} ${editable ? 'กำลังจดของ' : 'กำลังดู (อ่านอย่างเดียว)'} <b>${esc(SRC_LABEL[source] || source)}</b> · ยอดเดือน <b class="num" style="color:var(--primary)">${baht(mt.baht)}</b></div>
   </div>
 
-  <div class="room-grid">${rowsHtml}</div>
-
-  <div class="card card-pad room-foot">
-    <div class="room-foot-line"><span>${svg('calendar')} ยอดวันนี้</span><b class="num">${baht(dt.baht)}</b></div>
-    <div class="dim" style="font-size:12px">ชั่วคราว ${dt.temp} × ${fmt(rate.temp)} · ค้างคืน ${dt.overnight} × ${fmt(rate.overnight)}</div>
+  <div class="card mt4">
+    <div class="table-scroll"><table class="data room-month">
+      <thead><tr><th class="l">วันที่</th><th>ชั่วคราว</th><th>ค้างคืน</th><th>ยอด</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>
   </div>
 
   ${roomNotesPanel(source, y, m, editable)}`;
+}
+
+// ช่องจด 12 ห้องของวันที่กางอยู่ (stepper เดิม)
+function roomEditorHtml(source, y, m, d, editable, rate) {
+  const dt = roomDayTotal(source, y, m, d);
+  let rooms = '';
+  for (let room = 1; room <= 12; room++) {
+    const cell = rentalCell(source, y, m, d, room);
+    const tt = cell ? cell.temp : 0, oo = cell ? cell.overnight : 0;
+    const bv = tt * rate.temp + oo * rate.overnight;
+    rooms += `<div class="room-row ${tt || oo ? 'has' : ''}">
+      <div class="room-head"><span class="room-name">ห้อง ${room}</span><span class="room-baht">${bv ? bv.toLocaleString('th-TH') + ' ฿' : '-'}</span></div>
+      <div class="st-line">${stepperHtml(source, y, m, d, room, 'temp', tt, editable, 'temp')}</div>
+      <div class="st-line">${stepperHtml(source, y, m, d, room, 'overnight', oo, editable, 'night')}</div>
+    </div>`;
+  }
+  return `<div class="day-edit-inner">
+    <div class="day-edit-head">${svg('edit')} จดห้อง · ${esc(roomDateLabel(y, m, d))}</div>
+    <div class="room-grid">${rooms}</div>
+    <div class="day-edit-foot"><span>${svg('calendar')} ยอดวันนี้</span><b class="num">${baht(dt.baht)}</b></div>
+  </div>`;
 }
 
 function roomNotesPanel(source, y, m, editable) {
@@ -918,9 +955,17 @@ function renderRoomsCompare() {
 
 /* ---- rooms handlers ---- */
 function roomSelectTab(v) { S.ui.roomSel = v; render(); }
-function roomShiftDay(delta) { const g = new Date(S.ui.roomY - 543, S.ui.roomM - 1, S.ui.roomD); g.setDate(g.getDate() + delta); S.ui.roomY = g.getFullYear() + 543; S.ui.roomM = g.getMonth() + 1; S.ui.roomD = g.getDate(); render(); }
-function roomShiftMonth(delta) { const g = new Date(S.ui.roomY - 543, S.ui.roomM - 1 + delta, 1); S.ui.roomY = g.getFullYear() + 543; S.ui.roomM = g.getMonth() + 1; render(); }
-function roomToday() { const t = todayBE(); S.ui.roomY = t.y; S.ui.roomM = t.m; S.ui.roomD = t.d; render(); }
+// แตะวัน = กาง/ปิดช่องจด (เปิดวันใหม่ = ปิดวันเก่าอัตโนมัติ)
+function roomToggleDay(d) { S.ui.roomD = (S.ui.roomD === d ? null : d); S._roomWantScroll = S.ui.roomD != null; render(); }
+function roomShiftMonth(delta) {
+  const g = new Date(S.ui.roomY - 543, S.ui.roomM - 1 + delta, 1);
+  S.ui.roomY = g.getFullYear() + 543; S.ui.roomM = g.getMonth() + 1;
+  const t = todayBE();
+  S.ui.roomD = (S.ui.roomY === t.y && S.ui.roomM === t.m) ? t.d : null;   // เดือนนี้→กางวันนี้, เดือนอื่น→ปิดหมด
+  S._roomWantScroll = S.ui.roomD != null;
+  render();
+}
+function roomToday() { const t = todayBE(); S.ui.roomY = t.y; S.ui.roomM = t.m; S.ui.roomD = t.d; S._roomWantScroll = true; render(); }
 
 function roomStep(source, y, m, d, room, field, delta) {
   if (!canWriteSource(source)) return;
@@ -1557,7 +1602,7 @@ Object.assign(window, {
   prodAuto, prodPick, prodHide, prodAddNew, openCatalog, closeCatalog, addProductPrompt, confirmAddProduct,
   updateProduct, deleteProductPrompt, pickProductImage, deleteProductImage, armProductPaste,
   printUtility, printRound, submitEntry, closeModal,
-  roomSelectTab, roomShiftDay, roomShiftMonth, roomToday, roomStep, addRoomNote, editRoomNote, deleteRoomNote,
+  roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomStep, addRoomNote, editRoomNote, deleteRoomNote,
 });
 
 /* ============================================================
