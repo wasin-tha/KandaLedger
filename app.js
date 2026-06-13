@@ -891,6 +891,7 @@ function roomEditorHtml(source, y, m, d, editable, rate) {
   }
   return `<div class="day-edit-inner">
     <div class="day-edit-head">${svg('edit')} จดห้อง · ${esc(roomDateLabel(y, m, d))}</div>
+    <div class="cal-legend day-legend"><span><i class="cdot t"></i> ชั่วคราว</span><span><i class="cdot n"></i> ค้างคืน</span></div>
     <div class="room-lines">${rooms}</div>
     <div class="day-edit-foot"><span>${svg('calendar')} ยอดวันนี้</span><b class="num">${baht(dt.baht)}</b></div>
   </div>`;

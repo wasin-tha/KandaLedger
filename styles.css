@@ -638,7 +638,8 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 /* ช่องจดใต้ปฏิทิน (reuse stepper) */
 .day-edit-head { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; color: var(--primary); margin-bottom: 10px; }
 .day-edit-head svg { width: 16px; height: 16px; }
-.day-edit-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.day-legend { margin-top: -2px; margin-bottom: 10px; }
+.day-edit-foot { display: flex; align-items: baseline; justify-content: flex-start; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
 .day-edit-foot span { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text-2); }
 .day-edit-foot svg { width: 15px; height: 15px; }
 .day-edit-foot b { font-size: 19px; color: var(--primary); font-variant-numeric: tabular-nums; }
