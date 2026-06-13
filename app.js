@@ -808,13 +808,15 @@ function renderRooms() {
   return tabs + renderRoomEntry(sel, writeable.indexOf(sel) >= 0);
 }
 
-function stepperHtml(source, y, m, d, room, field, val, editable, kind) {
-  const lab = field === 'temp' ? 'ชั่วคราว' : 'ค้างคืน';
-  if (!editable) return `<span class="st-lab ${kind}">${lab}</span><span class="st-val ro">${val}</span>`;
-  return `<span class="st-lab ${kind}">${lab}</span>
+// stepper กะทัดรัด: จุดสี (ส้ม=ชั่วคราว เขียว=ค้างคืน ตาม legend) + −/ค่า/+ ไม่มีคำกำกับ
+function stepCompact(source, y, m, d, room, field, val, editable) {
+  const dot = field === 'temp' ? 't' : 'n';
+  const bk = field === 'temp' ? 'temp' : 'night';
+  if (!editable) return `<span class="rl-stat"><i class="cdot ${dot}"></i><span class="st-val ro">${val}</span></span>`;
+  return `<span class="rl-stat"><i class="cdot ${dot}"></i>
     <button class="st-btn" ${val <= 0 ? 'disabled' : ''} onclick="roomStep('${source}',${y},${m},${d},${room},'${field}',-1)" aria-label="ลด">−</button>
     <span class="st-val">${val}</span>
-    <button class="st-btn ${kind}" ${val >= 5 ? 'disabled' : ''} onclick="roomStep('${source}',${y},${m},${d},${room},'${field}',1)" aria-label="เพิ่ม">+</button>`;
+    <button class="st-btn ${bk}" ${val >= 5 ? 'disabled' : ''} onclick="roomStep('${source}',${y},${m},${d},${room},'${field}',1)" aria-label="เพิ่ม">+</button></span>`;
 }
 
 // หน้าจด = ปฏิทินทั้งเดือน (ช่องสรุป 3 ตัวเลข + จุดสี) + แตะวัน = ช่องจด 12 ห้องโผล่ใต้ปฏิทิน
@@ -874,23 +876,21 @@ function renderRoomEntry(source, editable) {
   ${roomNotesPanel(source, y, m, editable)}`;
 }
 
-// ช่องจด 12 ห้องของวันที่กางอยู่ (stepper เดิม)
+// ช่องจดวันที่เลือก — 1 บรรทัด/ห้อง (กะทัดรัด, สีส้ม/เขียวแทนคำ)
 function roomEditorHtml(source, y, m, d, editable, rate) {
   const dt = roomDayTotal(source, y, m, d);
   let rooms = '';
   for (let room = 1; room <= 12; room++) {
     const cell = rentalCell(source, y, m, d, room);
     const tt = cell ? cell.temp : 0, oo = cell ? cell.overnight : 0;
-    const bv = tt * rate.temp + oo * rate.overnight;
-    rooms += `<div class="room-row ${tt || oo ? 'has' : ''}">
-      <div class="room-head"><span class="room-name">ห้อง ${room}</span><span class="room-baht">${bv ? bv.toLocaleString('th-TH') + ' ฿' : '-'}</span></div>
-      <div class="st-line">${stepperHtml(source, y, m, d, room, 'temp', tt, editable, 'temp')}</div>
-      <div class="st-line">${stepperHtml(source, y, m, d, room, 'overnight', oo, editable, 'night')}</div>
+    rooms += `<div class="room-line ${tt || oo ? 'has' : ''}">
+      <span class="rl-name">ห้อง ${room}</span>
+      <span class="rl-steps">${stepCompact(source, y, m, d, room, 'temp', tt, editable)}${stepCompact(source, y, m, d, room, 'overnight', oo, editable)}</span>
     </div>`;
   }
   return `<div class="day-edit-inner">
     <div class="day-edit-head">${svg('edit')} จดห้อง · ${esc(roomDateLabel(y, m, d))}</div>
-    <div class="room-grid">${rooms}</div>
+    <div class="room-lines">${rooms}</div>
     <div class="day-edit-foot"><span>${svg('calendar')} ยอดวันนี้</span><b class="num">${baht(dt.baht)}</b></div>
   </div>`;
 }
