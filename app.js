@@ -1549,8 +1549,7 @@ function printUtility() {
       <div class="pk extra"><div class="l">ค่าปรับ/อื่นๆ</div><div class="v">${baht(sum.extra)}</div></div>
     </div>
     <table class="data"><thead><tr><th class="l">เดือน</th><th>ค่าเช่า</th><th>หน่วยไฟ</th><th>ค่าไฟ</th><th>หน่วยน้ำ</th><th>ค่าน้ำ</th><th>อื่นๆ</th><th>รวม</th><th class="l">หมายเหตุ</th><th>จ่าย</th></tr></thead>
-    <tbody>${body}</tbody></table>
-    <div class="print-foot">KandaLedger · ${esc(CFG.ORG_NAME || '')}</div>`);
+    <tbody>${body}</tbody></table>`);
 }
 
 function printRound() {
@@ -1584,8 +1583,7 @@ function printRound() {
       <div class="pk ship"><div class="l">ค่าส่ง</div><div class="v">${baht(t.shipping)}</div></div>
       <div class="pk disc"><div class="l">ส่วนลด</div><div class="v">${baht(t.discount)}</div></div>
     </div>
-    ${groupBlocks}
-    <div class="print-foot">KandaLedger · ${esc(CFG.ORG_NAME || '')}</div>`);
+    ${groupBlocks}`);
 }
 
 /* ============================================================
