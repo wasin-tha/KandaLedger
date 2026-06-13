@@ -978,6 +978,7 @@ function roomStep(source, y, m, d, room, field, delta) {
   let t = cell ? cell.temp : 0, o = cell ? cell.overnight : 0;
   if (field === 'temp') t = Math.max(0, Math.min(5, t + delta)); else o = Math.max(0, Math.min(5, o + delta));
   applyRoomLocal(source, y, m, d, room, t, o);
+  S._roomSeq = (S._roomSeq || 0) + 1;   // มาร์คว่ามีการแก้ห้อง — กัน poll เก่าทับ
   queueRoom({ source, year: y, month: m, day: d, room, temp: t, overnight: o });
   render();
 }
@@ -1000,13 +1001,18 @@ async function flushRoomQueue() {
   if (!HAS_BACKEND) { S.roomQueue = []; persistQueue(); S.roomSync = 'ok'; updateSyncDot(); return; }
   if (S._roomFlushing || !S.roomQueue.length) return;
   S._roomFlushing = true; S.roomSync = 'syncing'; updateSyncDot();
+  const batch = S.roomQueue.splice(0);   // เอาทั้งคิวออกมาส่งรอบเดียว (queue ว่างระหว่างส่ง — tap ใหม่เข้าคิวใหม่ได้)
+  persistQueue();
   try {
-    while (S.roomQueue.length) { await api.call('setRoom', S.roomQueue[0]); S.roomQueue.shift(); persistQueue(); }
-    S.roomSync = 'ok';
-  } catch (e) { S.roomSync = 'offline'; }
+    await api.call('setRooms', { items: batch });
+    S.roomSync = S.roomQueue.length ? 'pending' : 'ok';
+  } catch (e) {
+    S.roomQueue = batch.concat(S.roomQueue); persistQueue();   // ส่งไม่สำเร็จ → คืนเข้าคิว (setRoom เป็น idempotent)
+    S.roomSync = 'offline';
+  }
   finally {
     S._roomFlushing = false; updateSyncDot();
-    if (S.roomQueue.length) { clearTimeout(S._roomT); S._roomT = setTimeout(flushRoomQueue, 5000); }   // เน็ตหลุด → ลองใหม่
+    if (S.roomQueue.length) { clearTimeout(S._roomT); S._roomT = setTimeout(flushRoomQueue, 1500); }
   }
 }
 function updateSyncDot() { const el = $('#roomSync'); if (el) { el.className = 'room-sync ' + (S.roomSync || 'ok'); el.title = syncLabel(S.roomSync || 'ok'); } }
@@ -1075,13 +1081,16 @@ function startPolling() {
   _pollTimer = setInterval(pollOnce, 10000);
 }
 async function pollOnce() {
-  // หยุดถ้า: ยังไม่ล็อกอิน / แท็บไม่ได้โฟกัส / กำลังบันทึก / เปิด modal / กำลังพิมพ์ / มีคิวห้องพักค้าง (กันทับงานที่ยังไม่ส่ง)
-  if (!loggedIn() || document.hidden || S._busy || S.roomQueue.length) return;
+  // หยุดถ้า: ยังไม่ล็อกอิน / แท็บไม่ได้โฟกัส / กำลังบันทึก / เปิด modal / กำลังพิมพ์ / มีคิว / กำลัง flush
+  if (!loggedIn() || document.hidden || S._busy || S.roomQueue.length || S._roomFlushing) return;
   if ($('#modalBg').classList.contains('show')) return;
   const ae = document.activeElement;
   if (ae && (ae.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(ae.tagName))) return;
+  const seq = S._roomSeq || 0;   // จับ seq ก่อนยิง getAll
   try {
     const { data, me } = await api.getAll();
+    // ระหว่างรอ getAll ถ้ามีการแก้ห้อง/มีคิว/กำลัง flush → ทิ้งผลนี้ (กันข้อมูลเก่าทับค่าที่เพิ่งกด = เด้งกลับ)
+    if (S.roomQueue.length || S._roomFlushing || (S._roomSeq || 0) !== seq) return;
     if (me) S.me = me;
     if (JSON.stringify(data) !== JSON.stringify(S.data)) { S.data = data; render(); }
   } catch (e) { /* เงียบไว้ ครั้งหน้าค่อยลองใหม่ */ }
