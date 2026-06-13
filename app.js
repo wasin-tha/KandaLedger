@@ -104,8 +104,8 @@ const api = {
   // คืน { data, me } — ไม่แตะ S.data (ให้ผู้เรียกจัดการ เพื่อให้ pollOnce เทียบ diff ได้)
   async getAll() {
     if (!HAS_BACKEND) return { data: demoData(), me: demoMe() };
-    const j = await this.raw({ action: 'getAll', pin: S.pin });
-    if (!j.ok) throw new Error(j.error || 'load failed');
+    const j = await this.raw({ action: 'getAll', pin: S.pin });   // network error → throw (ไม่มี .auth)
+    if (!j.ok) { const e = new Error(j.error || 'load failed'); e.auth = true; throw e; }   // server ปฏิเสธ = รหัสผิด
     return { data: j.data, me: j.me };
   },
   // mutation ทั่วไป — รับ data/me กลับมาแล้วอัปเดต state (ใช้กับ action ที่อยากให้ render ใหม่)
@@ -1600,12 +1600,20 @@ async function boot() {
     return;
   }
   // Backend → ลองกู้ PIN ที่จำไว้
-  if (S.pin) {
-    showLoader('กำลังโหลดข้อมูลจาก Google Sheet');
+  if (!S.pin) { entryGate(); return; }
+  showLoader('กำลังโหลดข้อมูลจาก Google Sheet');
+  let authFail = false;
+  for (let attempt = 0; attempt < 2 && !S.me; attempt++) {
     try { const { data, me } = await api.getAll(); S.data = data; S.me = me; }
-    catch (e) { S.pin = ''; S.me = null; localStorage.removeItem('kanda_pin'); }
+    catch (e) {
+      if (e && e.auth) { authFail = true; break; }                  // รหัสผิดจริง (server ปฏิเสธ) → ค่อยล้าง
+      if (attempt === 0) await new Promise(r => setTimeout(r, 1500)); // เน็ต/เซิร์ฟเวอร์สะดุด → รอแล้วลองใหม่อัตโนมัติ
+    }
   }
-  if (S.me) { render(); startPolling(); flushRoomQueue(); } else entryGate();
+  if (authFail) { S.pin = ''; S.me = null; localStorage.removeItem('kanda_pin'); }
+  if (S.me) { render(); startPolling(); flushRoomQueue(); }
+  else if (S.pin) { $('#moduleSeg').classList.add('hidden'); $('#view').innerHTML = errorView('โหลดข้อมูลไม่สำเร็จ — เน็ตหรือเซิร์ฟเวอร์ขัดข้อง (รหัสยังจำไว้ให้)'); }
+  else entryGate();
 }
 
 /* expose handlers used in inline HTML */
