@@ -579,7 +579,7 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 
 /* ช่องจดในวัน — 1 บรรทัด/ห้อง (จอกว้าง 2 ห้อง/แถว, จอแคบ 1 ห้อง/แถว) */
 .room-lines { display: grid; grid-template-columns: 1fr; gap: 10px; }
-@media (min-width: 720px) { .room-lines { grid-template-columns: 1fr 1fr; column-gap: 16px; } }
+@media (min-width: 720px) { .room-lines { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(6, auto); grid-auto-flow: column; column-gap: 16px; } }
 .room-line { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
 .room-line.has { background: var(--surface-2); border-color: var(--border-strong); }
 .rl-name { font-weight: 700; font-size: 15px; color: var(--text-2); }
@@ -642,31 +642,40 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .cdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; margin-right: 3px; flex: 0 0 auto; }
 .cdot.t { background: var(--accent); }
 .cdot.n { background: var(--success); }
-.cal-legend { display: flex; gap: 14px; margin-top: 10px; font-size: 12.5px; color: var(--text-2); flex-wrap: wrap; align-items: center; }
-.cal-legend .cal-bk { font-weight: 600; }
+.cal-monthsum { display: flex; gap: 8px 18px; margin-top: 10px; font-size: 13px; color: var(--text-2); flex-wrap: wrap; align-items: center; }
+.cal-monthsum .ms-item { display: inline-flex; align-items: center; gap: 4px; }
+.cal-monthsum .ms-item b { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.cal-monthsum .ms-item.t b { color: var(--accent); }
+.cal-monthsum .ms-item.n b { color: var(--success); }
+.cal-monthsum .ms-total { margin-left: auto; padding: 4px 12px; background: var(--primary-50); border-radius: 8px; font-weight: 600; }
+.cal-monthsum .ms-total b { color: var(--primary); font-size: 15px; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .cal-head { margin-bottom: 6px; }
 .cal-wd { text-align: center; font-size: 12px; font-weight: 600; color: var(--text-3); padding: 2px 0; }
-.cal-cell { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 6px 4px; min-height: 76px; display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; font: inherit; transition: border-color .12s, background .12s; }
+.cal-cell { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 6px 8px 7px; min-height: 84px; display: flex; flex-direction: column; align-items: stretch; gap: 1px; cursor: pointer; font: inherit; text-align: left; transition: border-color .12s, background .12s; }
 .cal-cell.empty { border: none; background: transparent; cursor: default; min-height: 0; }
 .cal-cell:not(.empty):hover { border-color: var(--border-strong); background: var(--surface-2); }
 .cal-cell.has { border-color: var(--border-strong); }
 .cal-cell.sel { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-50); }
 .cal-day { font-weight: 700; font-size: 14px; color: var(--text); align-self: flex-start; padding-left: 2px; }
 .cal-cell.today .cal-day { background: var(--primary); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; padding: 0; }
-.cal-n { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; display: inline-flex; align-items: center; }
-.cal-n.t { color: var(--accent); }
-.cal-n.n { color: var(--success); }
-.cal-b { font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 1px; font-variant-numeric: tabular-nums; }
-.cal-empty { color: var(--text-3); margin-top: 10px; }
+.cal-row { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
+.cal-row b { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 12px; }
+.cal-row.t b { color: var(--accent); }
+.cal-row.n b { color: var(--success); }
+.cal-row .cal-lb { color: var(--text-2); }
+.cal-sum { margin-top: auto; padding-top: 4px; border-top: 1px dashed var(--border); font-size: 12.5px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.cal-empty { color: var(--text-3); margin: auto 0; text-align: center; }
 @media (max-width: 480px) {
   .cal-grid { gap: 3px; }
-  .cal-cell { min-height: 66px; padding: 4px 2px; border-radius: 8px; }
+  .cal-cell { min-height: 76px; padding: 4px 5px 5px; border-radius: 8px; }
   .cal-day { font-size: 12px; }
   .cal-cell.today .cal-day { width: 19px; height: 19px; font-size: 11px; }
-  .cal-n { font-size: 11.5px; }
-  .cal-b { font-size: 10px; }
-  .cal-legend { gap: 10px; font-size: 11.5px; }
+  .cal-row { font-size: 10.5px; gap: 2px 3px; flex-wrap: wrap; }
+  .cal-row .cdot { width: 6px; height: 6px; }
+  .cal-sum { font-size: 11px; }
+  .cal-monthsum { gap: 6px 12px; font-size: 12px; }
+  .cal-monthsum .ms-total { margin-left: 0; }
   .cal-wd { font-size: 11px; }
 }
 /* ช่องจดใต้ปฏิทิน (reuse stepper) */

@@ -847,7 +847,9 @@ function renderRoomEntry(source, editable) {
     cells += `<button class="cal-cell ${has ? 'has' : ''} ${isToday ? 'today' : ''} ${isSel ? 'sel' : ''}" onclick="roomToggleDay(${d})">
       <span class="cal-day">${d}</span>
       ${has
-        ? `<span class="cal-n t"><i class="cdot t"></i>${dt.temp}</span><span class="cal-n n"><i class="cdot n"></i>${dt.overnight}</span><span class="cal-b">${fmt(dt.baht)}</span>`
+        ? `<span class="cal-row t"><i class="cdot t"></i><b>${dt.temp}</b><span class="cal-lb">ชั่วคราว</span></span>
+           <span class="cal-row n"><i class="cdot n"></i><b>${dt.overnight}</b><span class="cal-lb">ค้างคืน</span></span>
+           <span class="cal-sum">${fmt(dt.baht)} บาท</span>`
         : `<span class="cal-empty">−</span>`}
     </button>`;
   }
@@ -868,8 +870,12 @@ function renderRoomEntry(source, editable) {
       <button class="btn btn-ghost btn-sm" onclick="roomShiftMonth(1)" aria-label="เดือนถัดไป">${svg('chevR')}</button>
       <span class="room-sync ${syncCls}" id="roomSync" title="${esc(syncLabel(syncCls))}"></span>
     </div>
-    <div class="room-who">${editable ? svg('edit') : svg('user')} ${editable ? 'กำลังจดของ' : 'กำลังดู (อ่านอย่างเดียว)'} <b>${esc(SRC_LABEL[source] || source)}</b> · ยอดเดือน <b class="num" style="color:var(--primary)">${baht(mt.baht)}</b></div>
-    <div class="cal-legend"><span><i class="cdot t"></i> ชั่วคราว</span><span><i class="cdot n"></i> ค้างคืน</span><span class="cal-bk">฿ ยอด</span></div>
+    <div class="room-who">${editable ? svg('edit') : svg('user')} ${editable ? 'กำลังจดของ' : 'กำลังดู (อ่านอย่างเดียว)'} <b>${esc(SRC_LABEL[source] || source)}</b></div>
+    <div class="cal-monthsum">
+      <span class="ms-item t"><i class="cdot t"></i><b>${mt.temp}</b> ครั้ง ชั่วคราว</span>
+      <span class="ms-item n"><i class="cdot n"></i><b>${mt.overnight}</b> ครั้ง ค้างคืน</span>
+      <span class="ms-item ms-total">ยอดรวมทั้งเดือน <b>${baht(mt.baht)}</b></span>
+    </div>
   </div>
 
   <div class="card card-pad mt4">
