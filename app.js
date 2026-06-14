@@ -810,15 +810,18 @@ function renderRooms() {
   return tabs + renderRoomEntry(sel, writeable.indexOf(sel) >= 0);
 }
 
-// stepper กะทัดรัด: จุดสี (ส้ม=ชั่วคราว เขียว=ค้างคืน ตาม legend) + −/ค่า/+ ไม่มีคำกำกับ
-function stepCompact(source, y, m, d, room, field, val, editable) {
+// แตะเลขเพื่อตั้งค่า 0–3 ได้เลย (ส้ม=ชั่วคราว เขียว=ค้างคืน) — ค่าที่เลือกไฮไลต์
+function numField(source, y, m, d, room, field, val, editable) {
   const dot = field === 'temp' ? 't' : 'n';
-  const bk = field === 'temp' ? 'temp' : 'night';
-  if (!editable) return `<span class="rl-stat"><i class="cdot ${dot}"></i><span class="st-val ro">${val}</span></span>`;
-  return `<span class="rl-stat"><i class="cdot ${dot}"></i>
-    <button class="st-btn" ${val <= 0 ? 'disabled' : ''} onclick="roomStep('${source}',${y},${m},${d},${room},'${field}',-1)" aria-label="ลด">−</button>
-    <span class="st-val">${val}</span>
-    <button class="st-btn ${bk}" ${val >= 5 ? 'disabled' : ''} onclick="roomStep('${source}',${y},${m},${d},${room},'${field}',1)" aria-label="เพิ่ม">+</button></span>`;
+  const cls = field === 'temp' ? 'temp' : 'night';
+  const label = field === 'temp' ? 'ชั่วคราว' : 'ค้างคืน';
+  const head = `<span class="rl-flabel"><i class="cdot ${dot}"></i>${label}</span>`;
+  if (!editable) return `<div class="rl-field">${head}<span class="np-ro ${cls}">${val}</span></div>`;
+  let btns = '';
+  for (let n = 0; n <= 3; n++) {
+    btns += `<button class="np-btn ${cls} ${n === val ? 'sel' : ''}" onclick="roomSet('${source}',${y},${m},${d},${room},'${field}',${n})">${n}</button>`;
+  }
+  return `<div class="rl-field">${head}<span class="numpad ${cls}">${btns}</span></div>`;
 }
 
 // หน้าจด = ปฏิทินทั้งเดือน (ช่องสรุป 3 ตัวเลข + จุดสี) + แตะวัน = ช่องจด 12 ห้องโผล่ใต้ปฏิทิน
@@ -887,12 +890,14 @@ function roomEditorHtml(source, y, m, d, editable, rate) {
     const tt = cell ? cell.temp : 0, oo = cell ? cell.overnight : 0;
     rooms += `<div class="room-line ${tt || oo ? 'has' : ''}">
       <span class="rl-name">ห้อง ${room}</span>
-      <span class="rl-steps">${stepCompact(source, y, m, d, room, 'temp', tt, editable)}${stepCompact(source, y, m, d, room, 'overnight', oo, editable)}</span>
+      <div class="rl-fields">
+        ${numField(source, y, m, d, room, 'temp', tt, editable)}
+        ${numField(source, y, m, d, room, 'overnight', oo, editable)}
+      </div>
     </div>`;
   }
   return `<div class="day-edit-inner">
     <div class="day-edit-head">${svg('edit')} จดห้อง · ${esc(roomDateLabel(y, m, d))}</div>
-    <div class="cal-legend day-legend"><span><i class="cdot t"></i> ชั่วคราว</span><span><i class="cdot n"></i> ค้างคืน</span></div>
     <div class="room-lines">${rooms}</div>
     <div class="day-edit-foot"><span>${svg('calendar')} ยอดวันนี้</span><b class="num">${baht(dt.baht)}</b></div>
   </div>`;
@@ -1019,11 +1024,13 @@ function roomShiftMonth(delta) {
 }
 function roomToday() { const t = todayBE(); S.ui.roomY = t.y; S.ui.roomM = t.m; S.ui.roomD = t.d; S._roomWantScroll = true; render(); }
 
-function roomStep(source, y, m, d, room, field, delta) {
+function roomSet(source, y, m, d, room, field, val) {
   if (!canWriteSource(source)) return;
   const cell = rentalCell(source, y, m, d, room);
   let t = cell ? cell.temp : 0, o = cell ? cell.overnight : 0;
-  if (field === 'temp') t = Math.max(0, Math.min(5, t + delta)); else o = Math.max(0, Math.min(5, o + delta));
+  val = Math.max(0, Math.min(3, val));
+  if (field === 'temp') t = val; else o = val;
+  if (t === (cell ? cell.temp : 0) && o === (cell ? cell.overnight : 0)) return;   // ไม่เปลี่ยน = ไม่ยิง
   applyRoomLocal(source, y, m, d, room, t, o);
   S._mutSeq = (S._mutSeq || 0) + 1;   // มาร์คว่ามีการแก้ — กัน poll เก่าทับ (กลไกกลาง ใช้ร่วมทั้งเว็บ)
   queueRoom({ source, year: y, month: m, day: d, room, temp: t, overnight: o });
@@ -1669,7 +1676,7 @@ Object.assign(window, {
   prodAuto, prodPick, prodHide, prodAddNew, openCatalog, closeCatalog, addProductPrompt, confirmAddProduct,
   updateProduct, deleteProductPrompt, pickProductImage, deleteProductImage, armProductPaste,
   printUtility, printRound, submitEntry, closeModal,
-  roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomStep, addRoomNote, editRoomNote, deleteRoomNote, cmpToggleDay, cmpFilter,
+  roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, cmpToggleDay, cmpFilter,
 });
 
 /* ============================================================
