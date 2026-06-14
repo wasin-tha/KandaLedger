@@ -138,7 +138,7 @@ function toast(msg, kind = '') {
 }
 
 /* ---------- modal ---------- */
-function openModal(html) { $('#modalBox').innerHTML = html; $('#modalBg').classList.add('show'); }
+function openModal(html, cls = '') { const b = $('#modalBox'); b.className = 'modal' + (cls ? ' ' + cls : ''); b.innerHTML = html; $('#modalBg').classList.add('show'); }
 function closeModal() { $('#modalBg').classList.remove('show'); }
 $('#modalBg').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
@@ -788,6 +788,54 @@ function roomMonthTotal(source, y, m) {
   return { temp: t, overnight: o, baht: t * rate.temp + o * rate.overnight };
 }
 function roomDateLabel(y, m, d) { const g = new Date(y - 543, m - 1, d); const wd = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'][g.getDay()]; return `${wd} ${d} ${MTH[m]} ${String(y).slice(-2)}`; }
+
+// รายงานละเอียดทั้งเดือน (สำหรับ capture ส่งหัวหน้า) — ราย วัน: ห้องไหน/ชั่วคราว/ค้างคืน/บาท + ยอดรวมเดือน
+function openRoomReport(source) {
+  const y = S.ui.roomY, m = S.ui.roomM;
+  const dim = daysInMonth(y, m);
+  let rows = '', activeDays = 0;
+  for (let d = 1; d <= dim; d++) {
+    const dt = roomDayTotal(source, y, m, d);
+    if (!dt.temp && !dt.overnight) continue;
+    activeDays++;
+    const temps = [], overs = [];
+    for (let room = 1; room <= 12; room++) {
+      const c = rentalCell(source, y, m, d, room);
+      if (!c) continue;
+      if (c.temp) temps.push(c.temp > 1 ? `${room}<small>×${c.temp}</small>` : `${room}`);
+      if (c.overnight) overs.push(c.overnight > 1 ? `${room}<small>×${c.overnight}</small>` : `${room}`);
+    }
+    const lines = [
+      temps.length ? `<span class="rep-lb t">ชั่วคราว</span> ห้อง ${temps.join(', ')}` : '',
+      overs.length ? `<span class="rep-lb n">ค้างคืน</span> ห้อง ${overs.join(', ')}` : ''
+    ].filter(Boolean).join('<br>');
+    rows += `<tr>
+      <td class="rep-date">${esc(roomDateLabel(y, m, d))}</td>
+      <td class="rep-rooms">${lines}</td>
+      <td class="rep-num t">${dt.temp}</td>
+      <td class="rep-num n">${dt.overnight}</td>
+      <td class="rep-num b">${fmt(dt.baht)}</td>
+    </tr>`;
+  }
+  const mt = roomMonthTotal(source, y, m);
+  const body = activeDays
+    ? `<table class="rep-tbl">
+        <thead><tr><th>วันที่</th><th>ห้องที่เข้าพัก</th><th class="t">ชั่วคราว</th><th class="n">ค้างคืน</th><th class="b">บาท</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td>รวมทั้งเดือน</td><td>${activeDays} วันที่มีคนพัก</td>
+          <td class="rep-num t">${mt.temp}</td><td class="rep-num n">${mt.overnight}</td><td class="rep-num b">${fmt(mt.baht)}</td>
+        </tr></tfoot>
+      </table>`
+    : `<div class="dim" style="padding:24px;text-align:center">— ยังไม่มีข้อมูลเดือนนี้ —</div>`;
+  openModal(`
+    <div class="rep-head">
+      <div><h3 style="margin:0">รายละเอียด ${MTH_FULL[m]} ${y}</h3>
+        <div class="dim" style="font-size:13px;margin-top:2px">${esc(SRC_LABEL[source] || source)} · ยอดรวม <b style="color:var(--primary)">${baht(mt.baht)}</b></div></div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()" aria-label="ปิด">✕</button>
+    </div>
+    <div class="rep-scroll">${body}</div>`, 'modal-report');
+}
 function syncLabel(s) { return { ok: 'ซิงค์แล้ว ✓', pending: 'รอบันทึก…', syncing: 'กำลังบันทึก…', offline: 'เน็ตหลุด — เก็บไว้แล้ว จะส่งเองเมื่อกลับมา' }[s] || ''; }
 
 function renderRooms() {
@@ -876,6 +924,7 @@ function renderRoomEntry(source, editable) {
       <span class="ms-item n"><i class="cdot n"></i><b>${mt.overnight}</b> ครั้ง ค้างคืน</span>
       <span class="ms-item ms-total">ยอดรวมทั้งเดือน <b>${baht(mt.baht)}</b></span>
     </div>
+    <button class="btn btn-ghost btn-sm cal-report-btn no-print" onclick="openRoomReport('${source}')">${svg('calendar')} ดูรายละเอียดทั้งเดือน</button>
   </div>
 
   <div class="card card-pad mt4">
@@ -1682,7 +1731,7 @@ Object.assign(window, {
   prodAuto, prodPick, prodHide, prodAddNew, openCatalog, closeCatalog, addProductPrompt, confirmAddProduct,
   updateProduct, deleteProductPrompt, pickProductImage, deleteProductImage, armProductPaste,
   printUtility, printRound, submitEntry, closeModal,
-  roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, cmpToggleDay, cmpFilter,
+  roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, cmpToggleDay, cmpFilter, openRoomReport,
 });
 
 /* ============================================================
