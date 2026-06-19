@@ -67,8 +67,7 @@ const S = {
   data: { workers: [], bills: [], rounds: [], items: [], images: [], products: [], rentals: [], rates: [], notes: [] },
   ui: {
     worker: null, fromIdx: 0, toIdx: 0, roundId: null, collapsedYears: new Set(), _initFor: null, newGroups: [], catalog: false, pasteGid: null, pasteRid: null, pastePid: null, roundSearch: '',
-    roomY: _tb.y, roomM: _tb.m, roomD: _tb.d, roomSel: null,   // roomSel = source ('maid'/'plug') หรือ 'compare'
-    cmpOpenDay: null, cmpOnlyConflict: false,                   // หน้าเทียบ: วันที่กางดูห้อง / กรองเฉพาะที่ขัดกัน
+    roomY: _tb.y, roomM: _tb.m, roomD: _tb.d, roomSel: null,   // roomSel = source ('plug')
   },
   roomQueue: [],                  // คิว setRoom ที่รอส่ง (กันเน็ตหลุด)
   roomSync: 'ok',                 // ok | pending | syncing | offline
@@ -765,9 +764,9 @@ function groupAddForm(r, gid) {
 }
 
 /* ============================================================
-   MODULE 3: ROOMS (ห้องพัก) — dual-entry maid/plug + เทียบ
+   MODULE 3: ROOMS (ห้องพัก) — จด plug (รายวัน 12 ห้อง)
    ============================================================ */
-const SRC_LABEL = { maid: 'แม่บ้าน', plug: 'ปลั๊ก' };
+const SRC_LABEL = { plug: 'ปลั๊ก' };
 function daysInMonth(y, m) { return new Date(y - 543, m, 0).getDate(); }
 // เรตที่มีผล ณ ปี/เดือนนั้น (ไม่มี → default 300/500)
 function roomRate(y, m) {
@@ -839,22 +838,18 @@ function openRoomReport(source) {
 function syncLabel(s) { return { ok: 'ซิงค์แล้ว ✓', pending: 'รอบันทึก…', syncing: 'กำลังบันทึก…', offline: 'เน็ตหลุด — เก็บไว้แล้ว จะส่งเองเมื่อกลับมา' }[s] || ''; }
 
 function renderRooms() {
-  const sources = S.me ? S.me.roomsRead : ['maid', 'plug'];
-  const writeable = S.me ? S.me.roomsWrite : ['maid', 'plug'];
-  const canCmp = !HAS_BACKEND || can('compare');
-  const validSels = sources.concat(canCmp ? ['compare'] : []);
+  const sources = S.me ? S.me.roomsRead : ['plug'];
+  const writeable = S.me ? S.me.roomsWrite : ['plug'];
   let sel = S.ui.roomSel;
-  if (!sel || validSels.indexOf(sel) < 0) sel = S.ui.roomSel = (writeable[0] || sources[0]);
+  if (!sel || sources.indexOf(sel) < 0) sel = S.ui.roomSel = (writeable[0] || sources[0]);
 
-  const tabBtns = validSels.map(v => {
+  const tabBtns = sources.map(v => {
     const active = v === sel ? 'active' : '';
-    const label = v === 'compare' ? `${svg('check')} เทียบ`
-      : (writeable.indexOf(v) >= 0 ? `${svg('edit')} จด: ${SRC_LABEL[v] || v}` : `${svg('user')} ดู: ${SRC_LABEL[v] || v}`);
+    const label = writeable.indexOf(v) >= 0 ? `${svg('edit')} จด: ${SRC_LABEL[v] || v}` : `${svg('user')} ดู: ${SRC_LABEL[v] || v}`;
     return `<button class="tab ${active}" onclick="roomSelectTab('${v}')">${label}</button>`;
   }).join('');
-  const tabs = validSels.length > 1 ? `<div class="tabs no-print">${tabBtns}</div>` : '';
+  const tabs = sources.length > 1 ? `<div class="tabs no-print">${tabBtns}</div>` : '';
 
-  if (sel === 'compare') return tabs + renderRoomsCompare();
   return tabs + renderRoomEntry(sel, writeable.indexOf(sel) >= 0);
 }
 
@@ -977,96 +972,8 @@ function roomNotesPanel(source, y, m, editable) {
   </div>`;
 }
 
-// มีการจดของ source นั้นในวันนั้นไหม (มีแถว rental = จดแล้ว เพราะ 0/0 ถูกลบ)
-function dayActive(source, y, m, d) { return (S.data.rentals || []).some(r => r.source === source && r.year === y && r.month === m && r.day === d); }
-// บรรทัดห้องที่ขัดกัน (ในวันที่กางอยู่)
-function cmpRoomLine(c) {
-  const tBad = c.at !== c.bt, oBad = c.ao !== c.bo;
-  return `<div class="cmp-room">
-    <span class="cmp-rn">ห้อง ${c.room}</span>
-    <span class="cmp-m ${tBad ? 'bad' : ''}">ชั่วคราว ${c.at}/${c.bt}</span>
-    <span class="cmp-m ${oBad ? 'bad' : ''}">ค้างคืน ${c.ao}/${c.bo}</span>
-  </div>`;
-}
-
-function renderRoomsCompare() {
-  const y = S.ui.roomY, m = S.ui.roomM;
-  const dim = daysInMonth(y, m);
-  const mt = roomMonthTotal('maid', y, m), pt = roomMonthTotal('plug', y, m);
-  const diffBaht = pt.baht - mt.baht;
-  const openDay = S.ui.cmpOpenDay, onlyConf = S.ui.cmpOnlyConflict;
-
-  let matchN = 0, conflictN = 0, soloN = 0, anyDay = 0, rowsHtml = '';
-  for (let d = 1; d <= dim; d++) {
-    const maidA = dayActive('maid', y, m, d), plugA = dayActive('plug', y, m, d);
-    if (!maidA && !plugA) continue;
-    anyDay++;
-    const md = roomDayTotal('maid', y, m, d), pd = roomDayTotal('plug', y, m, d);
-    const conflicts = [];
-    if (maidA && plugA) for (let room = 1; room <= 12; room++) {
-      const a = rentalCell('maid', y, m, d, room), b = rentalCell('plug', y, m, d, room);
-      const at = a ? a.temp : 0, ao = a ? a.overnight : 0, bt = b ? b.temp : 0, bo = b ? b.overnight : 0;
-      if (at !== bt || ao !== bo) conflicts.push({ room, at, ao, bt, bo });
-    }
-    const kind = (maidA && plugA) ? (conflicts.length ? 'conflict' : 'ok') : 'solo';
-    if (kind === 'ok') matchN++; else if (kind === 'conflict') conflictN++; else soloN++;
-    if (onlyConf && kind !== 'conflict') continue;
-
-    const side = (active, dt) => active ? `<b class="num">${fmt(dt.baht)}</b><span class="cmp-cnt">${dt.temp}·${dt.overnight}</span>` : '<span class="cmp-none">—</span>';
-    let status, expandable = false;
-    if (kind === 'ok') status = '<span class="cmp-badge ok">✓ ตรง</span>';
-    else if (kind === 'conflict') { status = `<span class="cmp-badge conflict">⚠ ขัด ${conflicts.length} ห้อง</span>`; expandable = true; }
-    else status = `<span class="cmp-badge solo">◐ เฉพาะ${maidA ? 'แม่บ้าน' : 'ปลั๊ก'}</span>`;
-    const isOpen = expandable && openDay === d;
-    rowsHtml += `<div class="cmp-day ${kind} ${isOpen ? 'open' : ''}">
-      <div class="cmp-row" ${expandable ? `onclick="cmpToggleDay(${d})"` : ''}>
-        <span class="cmp-d">${d} ${MTH[m]}</span>
-        <span class="cmp-side">${side(maidA, md)}</span>
-        <span class="cmp-side">${side(plugA, pd)}</span>
-        <span class="cmp-st">${status}${expandable ? (isOpen ? ' ▾' : ' ▸') : ''}</span>
-      </div>
-      ${isOpen ? `<div class="cmp-rooms">${conflicts.map(cmpRoomLine).join('')}</div>` : ''}
-    </div>`;
-  }
-  const listInner = rowsHtml || `<div class="empty" style="padding:28px">${svg('check')}<p><strong>${anyDay ? (onlyConf ? 'ไม่มีวันที่จดขัดกัน 🎉' : 'ไม่มีข้อมูล') : 'ยังไม่มีข้อมูลเดือนนี้'}</strong></p>${anyDay ? '<p class="dim">ทั้งสองคนจดตรงกัน (หรือยังจดไม่ครบ)</p>' : ''}</div>`;
-
-  const mnotes = (S.data.notes || []).filter(n => n.source === 'maid' && n.year === y && n.month === m);
-  const pnotes = (S.data.notes || []).filter(n => n.source === 'plug' && n.year === y && n.month === m);
-  const noteList = arr => arr.length ? arr.map(n => `<li>${esc(n.text)}${n.amount ? ` · ${esc(baht(n.amount))}` : ''}</li>`).join('') : '<li class="dim">—</li>';
-
-  return `
-  <div class="card card-pad room-bar">
-    <div class="room-datenav">
-      <button class="btn btn-ghost btn-sm" onclick="roomShiftMonth(-1)" aria-label="เดือนก่อน">${svg('chevL')}</button>
-      <span class="room-date">${svg('calendar')} ${MTH_FULL[m]} ${y}</span>
-      <button class="btn btn-ghost btn-sm" onclick="roomShiftMonth(1)" aria-label="เดือนถัดไป">${svg('chevR')}</button>
-    </div>
-  </div>
-  <div class="card card-pad mt4">
-    <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-label">${svg('user')} แม่บ้าน</div><div class="kpi-value num">${baht(mt.baht)}</div><div class="kpi-sub">ชั่วคราว ${mt.temp} · ค้างคืน ${mt.overnight}</div></div>
-      <div class="kpi"><div class="kpi-label">${svg('user')} ปลั๊ก</div><div class="kpi-value num">${baht(pt.baht)}</div><div class="kpi-sub">ชั่วคราว ${pt.temp} · ค้างคืน ${pt.overnight}</div></div>
-      <div class="kpi ${conflictN ? 'is-danger' : 'is-success'}"><div class="kpi-label">ผลต่าง (ปลั๊ก−แม่บ้าน)</div><div class="kpi-value num">${diffBaht > 0 ? '+' : ''}${baht(diffBaht)}</div><div class="kpi-sub">⚠ ขัดกัน ${conflictN} · ◐ ฝ่ายเดียว ${soloN} · ✓ ตรง ${matchN}</div></div>
-    </div>
-  </div>
-  <div class="card card-pad mt4">
-    <div class="toolbar between" style="align-items:center;margin-bottom:0">
-      <div class="section-title" style="font-size:14px">${svg('check')} เทียบรายวัน</div>
-      <label class="cmp-filter"><input type="checkbox" ${onlyConf ? 'checked' : ''} onchange="cmpFilter(this.checked)"> เฉพาะที่ขัดกัน</label>
-    </div>
-    <div class="cmp-head"><span>วันที่</span><span>แม่บ้าน</span><span>ปลั๊ก</span><span>สถานะ</span></div>
-    <div class="cmp-list">${listInner}</div>
-  </div>
-  <div class="card card-pad mt4">
-    <div class="section-title" style="font-size:14px">${svg('edit')} หมายเหตุ — เทียบ</div>
-    <div class="cmp-notes mt4"><div><div class="dim" style="font-weight:600;margin-bottom:4px">แม่บ้าน</div><ul>${noteList(mnotes)}</ul></div><div><div class="dim" style="font-weight:600;margin-bottom:4px">ปลั๊ก</div><ul>${noteList(pnotes)}</ul></div></div>
-  </div>`;
-}
-
 /* ---- rooms handlers ---- */
 function roomSelectTab(v) { S.ui.roomSel = v; render(); }
-function cmpToggleDay(d) { S.ui.cmpOpenDay = S.ui.cmpOpenDay === d ? null : d; render(); }
-function cmpFilter(on) { S.ui.cmpOnlyConflict = !!on; render(); }
 // แตะวันในปฏิทิน = เลือกวันนั้น → ช่องจดโผล่ใต้ปฏิทิน + เลื่อนจอลงมา
 function roomToggleDay(d) { S.ui.roomD = d; S._roomWantScroll = true; render(); }
 function roomShiftMonth(delta) {
@@ -1731,26 +1638,24 @@ Object.assign(window, {
   prodAuto, prodPick, prodHide, prodAddNew, openCatalog, closeCatalog, addProductPrompt, confirmAddProduct,
   updateProduct, deleteProductPrompt, pickProductImage, deleteProductImage, armProductPaste,
   printUtility, printRound, submitEntry, closeModal,
-  roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, cmpToggleDay, cmpFilter, openRoomReport,
+  roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, openRoomReport,
 });
 
 /* ============================================================
    DEMO data (used only when backend not configured)
    ============================================================ */
 function demoMe() {
-  return { role: 'owner', label: 'เจ้าของ (เดโม)', caps: { utilityRead: 1, utilityWrite: 1, purchaseRead: 1, purchaseWrite: 1, purchaseDone: 1, rooms: 1, compare: 1, rates: 1 }, roomsRead: ['maid', 'plug'], roomsWrite: ['maid', 'plug'] };
+  return { role: 'owner', label: 'เจ้าของ (เดโม)', caps: { utilityRead: 1, utilityWrite: 1, purchaseRead: 1, purchaseWrite: 1, purchaseDone: 1, rooms: 1, rates: 1 }, roomsRead: ['plug'], roomsWrite: ['plug'] };
 }
 function demoData() {
   const t = todayBE();
   return {
     rates: [{ effectiveYear: 2569, effectiveMonth: 1, tempRate: 300, overnightRate: 500 }],
     rentals: [
-      { id: 'rt1', source: 'maid', year: t.y, month: t.m, day: t.d, room: 2, temp: 0, overnight: 1, updatedAt: '' },
-      { id: 'rt2', source: 'maid', year: t.y, month: t.m, day: t.d, room: 3, temp: 2, overnight: 0, updatedAt: '' },
       { id: 'rt3', source: 'plug', year: t.y, month: t.m, day: t.d, room: 2, temp: 0, overnight: 1, updatedAt: '' },
       { id: 'rt4', source: 'plug', year: t.y, month: t.m, day: t.d, room: 3, temp: 1, overnight: 0, updatedAt: '' },
     ],
-    notes: [{ id: 'n1', source: 'maid', year: t.y, month: t.m, text: 'เบียร์ลีโอ 8 ขวด', amount: 640, updatedAt: '' }],
+    notes: [{ id: 'n1', source: 'plug', year: t.y, month: t.m, text: 'เบียร์ลีโอ 8 ขวด', amount: 640, updatedAt: '' }],
     workers: [{ name: 'คนงาน 1', elecRate: 7, waterRate: 30 }],
     bills: [
       { id: 'b1', worker: 'คนงาน 1', year: 2569, month: 1, rent: 2000, eOld: 100, eNew: 145, wOld: 20, wNew: 24, extra: 0, note: '', paid: true },
