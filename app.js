@@ -69,7 +69,7 @@ const S = {
   ui: {
     worker: null, fromIdx: 0, toIdx: 0, roundId: null, collapsedYears: new Set(), _initFor: null, newGroups: [], catalog: false, pasteGid: null, pasteRid: null, pastePid: null, roundSearch: '',
     roomY: _tb.y, roomM: _tb.m, roomD: _tb.d, roomSel: null,   // roomSel = source ('plug')
-    docDraft: null,   // เอกสารที่กำลังดู/แก้ (null = หน้ารายการ) { id, title, lines:[{label,value}] }
+    docId: null, docDraft: null,   // docId = เอกสารที่เปิดดู (null=แกลเลอรี) · docDraft = กำลังแก้/สร้าง { id, title, rows, notes }
   },
   roomQueue: [],                  // คิว setRoom ที่รอส่ง (กันเน็ตหลุด)
   roomSync: 'ok',                 // ok | pending | syncing | offline
@@ -1075,13 +1075,14 @@ function errorView(msg) {
 }
 
 /* ============================================================
-   MODULE 4: DOCS (เอกสารรวม) — owner+plug ดู+แก้ได้ทั้งคู่
-   เอกสาร = ชื่อ + หลายบรรทัด {label, value} (ตารางหัวข้อ-ค่า)
+   MODULE 4: DOCS (เอกสาร) — แกลเลอรีเอกสารพร้อมพิมพ์ (owner+plug ดู+แก้)
+   เอกสาร 1 ใบ = "กระดาษ" หน้าตาเหมือนใบติดประกาศ: ชื่อ + ตารางราคา + หมายเหตุ
+   body (เก็บใน Sheet) = JSON { rows:[{label,value}], notes:[string] }
    ============================================================ */
-// เอกสารแรกตามรูป (ตารางค่าเช่ากานดา 3-4) — ใช้ prefill ตอนสร้างเอกสารแรก
+// เอกสารแรกตามรูป (ตารางค่าเช่ากานดา 3-4) — ปุ่ม "สร้างเอกสาร กานดา 3-4" ใช้ตัวนี้
 const KANDA_DOC_TEMPLATE = {
   id: null, title: 'กานดา 3 - 4',
-  lines: [
+  rows: [
     { label: 'ชั้น 1 แอร์', value: '3,800' },
     { label: 'ชั้น 1 พัดลม', value: '2,800' },
     { label: 'ชั้น 2 แอร์', value: '3,800' },
@@ -1089,33 +1090,48 @@ const KANDA_DOC_TEMPLATE = {
     { label: 'ชั้น 3 พัดลม', value: '2,300' },
     { label: 'ชั้น 4 พัดลม', value: '2,200' },
     { label: 'ชั้น 5 พัดลม', value: '2,100' },
-    { label: 'ค่าไฟ', value: 'หน่วยละ 8 บาท' },
-    { label: 'ค่าน้ำ', value: 'หน่วยละ 24 บาท' },
-    { label: 'โทร', value: '082-3638724' },
   ],
+  notes: ['ค่าไฟ หน่วยละ 8 บาท', 'ค่าน้ำ หน่วยละ 24 บาท', 'โทร. 082-3638724'],
 };
+const docClone = d => JSON.parse(JSON.stringify(d));
+const findDoc = id => (S.data.docs || []).find(d => d.id === id) || null;
+
+// "กระดาษ" หน้าเดียว — ใช้ทั้งในแกลเลอรี (ย่อ), หน้าดูเต็ม, และตอนพิมพ์
+function docPaperHtml(doc) {
+  const rowsH = (doc.rows || []).map(r =>
+    `<tr><td class="dp-l">${esc(r.label)}</td><td class="dp-v">${esc(r.value)}</td></tr>`).join('');
+  const notesH = (doc.notes || []).filter(n => String(n).trim())
+    .map(n => `<div class="dp-note">${esc(n)}</div>`).join('');
+  return `<div class="paper">
+    <div class="dp-title">${esc(doc.title || '')}</div>
+    ${rowsH ? `<table class="dp-table">${rowsH}</table>` : ''}
+    ${notesH ? `<div class="dp-notes">${notesH}</div>` : ''}
+  </div>`;
+}
 
 function renderDocs() {
   if (S.ui.docDraft) return renderDocEditor(S.ui.docDraft);
+  if (S.ui.docId) { const doc = findDoc(S.ui.docId); if (doc) return renderDocView(doc); S.ui.docId = null; }
+  return renderDocList();
+}
+
+function renderDocList() {
   const docs = S.data.docs || [];
   let h = `<div class="card card-pad">
     <div class="toolbar between" style="align-items:center">
-      <div class="section-title">${svg('doc')} เอกสารรวม</div>
+      <div class="section-title">${svg('doc')} เอกสาร</div>
       <button class="btn btn-primary btn-sm no-print" onclick="newDoc()">${svg('plus')} เพิ่มเอกสาร</button>
     </div>`;
   if (!docs.length) {
-    h += panelEmpty('doc', 'ยังไม่มีเอกสาร', 'ทุกคน (เจ้าของ + ปลั๊ก) เพิ่มและแก้เอกสารร่วมกันได้') +
+    h += panelEmpty('doc', 'ยังไม่มีเอกสาร', 'เอกสารพร้อมพิมพ์ — เจ้าของและปลั๊กเพิ่ม/แก้/พิมพ์ร่วมกันได้') +
       `<div class="mt4" style="text-align:center"><button class="btn btn-primary" onclick="newDoc('kanda')">${svg('plus')} สร้างเอกสาร กานดา 3-4</button></div>`;
   } else {
     h += '<div class="doc-grid mt4">';
     docs.forEach(doc => {
-      const prev = (doc.lines || []).slice(0, 5)
-        .map(l => `<div class="dc-line"><span>${esc(l.label)}</span><b>${esc(l.value)}</b></div>`).join('');
-      const more = (doc.lines || []).length > 5 ? `<div class="dc-more">+${doc.lines.length - 5} รายการ</div>` : '';
-      h += `<button class="doc-card" onclick="openDoc('${esc(doc.id)}')">
-        <div class="dc-title">${svg('doc')} ${esc(doc.title || '(ไม่มีชื่อ)')}</div>
-        <div class="dc-prev">${prev || '<span class="dim">ว่าง</span>'}${more}</div>
-        ${doc.updatedAt ? `<div class="dc-meta">แก้ล่าสุด ${esc(doc.updatedAt)}</div>` : ''}
+      h += `<button class="doc-card" onclick="openDoc('${esc(doc.id)}')" title="${esc(doc.title || '')}">
+        <div class="doc-thumb">${docPaperHtml(doc)}</div>
+        <div class="dc-foot"><span class="dc-name">${esc(doc.title || '(ไม่มีชื่อ)')}</span>
+          ${doc.updatedAt ? `<span class="dc-meta">${esc(doc.updatedAt)}</span>` : ''}</div>
       </button>`;
     });
     h += '</div>';
@@ -1124,68 +1140,101 @@ function renderDocs() {
   return h;
 }
 
-function renderDocEditor(d) {
-  const lines = (d.lines || []).map((l, i) => `
-    <div class="doc-line">
-      <input class="input doc-l" value="${esc(l.label)}" placeholder="หัวข้อ" oninput="docSet(${i},'label',this.value)">
-      <input class="input doc-v" value="${esc(l.value)}" placeholder="ข้อมูล" oninput="docSet(${i},'value',this.value)">
-      <button class="btn btn-icon btn-ghost btn-sm" title="ลบแถว" onclick="docDelLine(${i})">${svg('trash')}</button>
-    </div>`).join('');
+function renderDocView(doc) {
   return `<div class="card card-pad">
-    <div class="toolbar between" style="align-items:center">
-      <button class="btn btn-ghost btn-sm" onclick="closeDoc()">${svg('back')} กลับ</button>
+    <div class="toolbar between no-print" style="align-items:center">
+      <button class="btn btn-ghost btn-sm" onclick="backToDocs()">${svg('back')} เอกสารทั้งหมด</button>
       <div class="row">
-        ${d.id ? `<button class="btn btn-danger btn-sm" onclick="deleteDocPrompt()">${svg('trash')} ลบเอกสาร</button>` : ''}
-        <button class="btn btn-primary btn-sm" id="docSaveBtn" onclick="saveDoc()">${svg('check')} บันทึก</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteDocPrompt('${esc(doc.id)}')">${svg('trash')} ลบ</button>
+        <button class="btn btn-ghost btn-sm" onclick="editDoc('${esc(doc.id)}')">${svg('edit')} แก้ไข</button>
+        <button class="btn btn-accent btn-sm" onclick="printDocument('${esc(doc.id)}')">${svg('printer')} พิมพ์</button>
       </div>
     </div>
-    <div class="field mt4"><label>ชื่อเอกสาร</label>
-      <input class="input doc-title-in" value="${esc(d.title)}" placeholder="เช่น กานดา 3 - 4" oninput="docSetTitle(this.value)"></div>
-    <div class="doc-lines mt4">${lines}</div>
-    <div class="mt4"><button class="btn btn-ghost btn-sm" onclick="docAddLine()">${svg('plus')} เพิ่มแถว</button></div>
+    <div class="doc-stage mt4">${docPaperHtml(doc)}</div>
   </div>`;
 }
 
+function renderDocEditor(d) {
+  const rowsH = (d.rows || []).map((r, i) => `
+    <div class="doc-erow">
+      <input class="input" value="${esc(r.label)}" placeholder="รายการ (เช่น ชั้น 1 แอร์)" oninput="docSetRow(${i},'label',this.value)">
+      <input class="input doc-ev" value="${esc(r.value)}" placeholder="ราคา/ค่า" oninput="docSetRow(${i},'value',this.value)">
+      <button class="btn btn-icon btn-ghost btn-sm" title="ลบแถว" onclick="docDelRow(${i})">${svg('trash')}</button>
+    </div>`).join('');
+  const notesH = (d.notes || []).map((n, i) => `
+    <div class="doc-enote">
+      <input class="input" value="${esc(n)}" placeholder="หมายเหตุ (เช่น ค่าไฟ หน่วยละ 8 บาท)" oninput="docSetNote(${i},this.value)">
+      <button class="btn btn-icon btn-ghost btn-sm" title="ลบ" onclick="docDelNote(${i})">${svg('trash')}</button>
+    </div>`).join('');
+  return `<div class="card card-pad">
+    <div class="toolbar between" style="align-items:center">
+      <button class="btn btn-ghost btn-sm" onclick="cancelDocEdit()">${svg('back')} ยกเลิก</button>
+      <button class="btn btn-primary btn-sm" id="docSaveBtn" onclick="saveDoc()">${svg('check')} บันทึก</button>
+    </div>
+    <div class="field mt4"><label>ชื่อเอกสาร</label>
+      <input class="input doc-title-in" value="${esc(d.title)}" placeholder="เช่น กานดา 3 - 4" oninput="docSetTitle(this.value)"></div>
+
+    <div class="doc-esec mt4">
+      <div class="doc-esec-h">${svg('receipt')} ตารางราคา</div>
+      <div class="doc-erows">${rowsH || '<p class="dim">ยังไม่มีแถว</p>'}</div>
+      <button class="btn btn-ghost btn-sm mt4" onclick="docAddRow()">${svg('plus')} เพิ่มแถวราคา</button>
+    </div>
+
+    <div class="doc-esec mt4">
+      <div class="doc-esec-h">${svg('edit')} หมายเหตุ (บรรทัดล่าง)</div>
+      <div class="doc-enotes">${notesH || '<p class="dim">ยังไม่มีหมายเหตุ</p>'}</div>
+      <button class="btn btn-ghost btn-sm mt4" onclick="docAddNote()">${svg('plus')} เพิ่มหมายเหตุ</button>
+    </div>
+  </div>`;
+}
+
+/* ---- docs handlers ---- */
 function newDoc(tpl) {
-  S.ui.docDraft = tpl === 'kanda'
-    ? JSON.parse(JSON.stringify(KANDA_DOC_TEMPLATE))
-    : { id: null, title: '', lines: [{ label: '', value: '' }] };
+  S.ui.docId = null;
+  S.ui.docDraft = tpl === 'kanda' ? docClone(KANDA_DOC_TEMPLATE) : { id: null, title: '', rows: [{ label: '', value: '' }], notes: [''] };
   render();
 }
-function openDoc(id) {
-  const doc = (S.data.docs || []).find(x => x.id === id);
-  if (!doc) return;
-  S.ui.docDraft = { id: doc.id, title: doc.title || '', lines: (doc.lines || []).map(l => ({ label: l.label || '', value: l.value || '' })) };
+function openDoc(id) { S.ui.docId = id; S.ui.docDraft = null; render(); }
+function backToDocs() { S.ui.docId = null; S.ui.docDraft = null; render(); }
+function editDoc(id) {
+  const doc = findDoc(id); if (!doc) return;
+  S.ui.docDraft = { id: doc.id, title: doc.title || '', rows: docClone(doc.rows || []), notes: (doc.notes || []).slice() };
   render();
 }
-function closeDoc() { S.ui.docDraft = null; render(); }
+function cancelDocEdit() { S.ui.docDraft = null; render(); }   // กลับไปหน้าดู (ถ้ามี docId) หรือรายการ
 function docSetTitle(v) { if (S.ui.docDraft) S.ui.docDraft.title = v; }
-function docSet(i, f, v) { const d = S.ui.docDraft; if (d && d.lines[i]) d.lines[i][f] = v; }
-function docAddLine() { const d = S.ui.docDraft; if (d) { d.lines.push({ label: '', value: '' }); render(); } }
-function docDelLine(i) { const d = S.ui.docDraft; if (d) { d.lines.splice(i, 1); render(); } }
+function docSetRow(i, f, v) { const d = S.ui.docDraft; if (d && d.rows[i]) d.rows[i][f] = v; }
+function docAddRow() { const d = S.ui.docDraft; if (d) { d.rows.push({ label: '', value: '' }); render(); } }
+function docDelRow(i) { const d = S.ui.docDraft; if (d) { d.rows.splice(i, 1); render(); } }
+function docSetNote(i, v) { const d = S.ui.docDraft; if (d) d.notes[i] = v; }
+function docAddNote() { const d = S.ui.docDraft; if (d) { d.notes.push(''); render(); } }
+function docDelNote(i) { const d = S.ui.docDraft; if (d) { d.notes.splice(i, 1); render(); } }
 
 async function saveDoc() {
   const d = S.ui.docDraft; if (!d) return;
   const title = (d.title || '').trim();
   if (!title) { toast('ใส่ชื่อเอกสารก่อน', 'err'); return; }
-  const lines = (d.lines || [])
-    .map(l => ({ label: (l.label || '').trim(), value: (l.value || '').trim() }))
-    .filter(l => l.label || l.value);
-  const body = JSON.stringify({ lines });
-  let ok = false;
+  const rows = (d.rows || []).map(r => ({ label: (r.label || '').trim(), value: (r.value || '').trim() })).filter(r => r.label || r.value);
+  const notes = (d.notes || []).map(n => (n || '').trim()).filter(Boolean);
+  const body = JSON.stringify({ rows, notes });
+  let ok = false, newId = d.id;
   await withBusy('docSaveBtn', async () => {
-    if (d.id) await api.post('updateDoc', { id: d.id, title, body });
-    else await api.post('addDoc', { title, body });
+    const j = d.id ? await api.post('updateDoc', { id: d.id, title, body }) : await api.post('addDoc', { title, body });
+    if (j && j.newId) newId = j.newId;
     ok = true;
   }, 'กำลังบันทึก');
-  if (ok) { S.ui.docDraft = null; toast('บันทึกเอกสารแล้ว', 'ok'); render(); }
+  if (ok) { S.ui.docDraft = null; S.ui.docId = newId || null; toast('บันทึกเอกสารแล้ว', 'ok'); render(); }
 }
-function deleteDocPrompt() {
-  const d = S.ui.docDraft; if (!d || !d.id) return;
-  confirmDialog(`ลบเอกสาร "${d.title}" ?`, async () => {
-    await api.post('deleteDoc', { id: d.id });
-    S.ui.docDraft = null; toast('ลบเอกสารแล้ว', 'ok'); render();
+function deleteDocPrompt(id) {
+  const doc = findDoc(id); if (!doc) return;
+  confirmDialog(`ลบเอกสาร "${doc.title}" ?`, async () => {
+    await api.post('deleteDoc', { id });
+    S.ui.docId = null; S.ui.docDraft = null; toast('ลบเอกสารแล้ว', 'ok'); render();
   }, { danger: true, label: 'ลบ', icon: 'trash' });
+}
+function printDocument(id) {
+  const doc = findDoc(id); if (!doc) return;
+  printDoc(`<div class="doc-print">${docPaperHtml(doc)}</div>`);
 }
 
 /* ============================================================
@@ -1235,7 +1284,7 @@ $('#moduleSeg').addEventListener('click', e => {
   if (HAS_BACKEND && !loggedIn()) return;   // ยังไม่ล็อกอิน → ไม่สลับโมดูล
   const b = e.target.closest('button'); if (!b || b.hidden) return;
   if (!allowedModules().includes(b.dataset.module)) return;
-  S.module = b.dataset.module; S.ui.roundId = null; S.ui.catalog = false; S.ui.docDraft = null;
+  S.module = b.dataset.module; S.ui.roundId = null; S.ui.catalog = false; S.ui.docId = null; S.ui.docDraft = null;
   localStorage.setItem('kanda_module', S.module);   // จำแท็บล่าสุด
   render();
 });
@@ -1757,7 +1806,8 @@ Object.assign(window, {
   updateProduct, deleteProductPrompt, pickProductImage, deleteProductImage, armProductPaste,
   printUtility, printRound, submitEntry, closeModal,
   roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, openRoomReport,
-  newDoc, openDoc, closeDoc, docSetTitle, docSet, docAddLine, docDelLine, saveDoc, deleteDocPrompt,
+  newDoc, openDoc, backToDocs, editDoc, cancelDocEdit, docSetTitle, docSetRow, docAddRow, docDelRow,
+  docSetNote, docAddNote, docDelNote, saveDoc, deleteDocPrompt, printDocument,
 });
 
 /* ============================================================
@@ -1775,11 +1825,12 @@ function demoData() {
       { id: 'rt4', source: 'plug', year: t.y, month: t.m, day: t.d, room: 3, temp: 1, overnight: 0, updatedAt: '' },
     ],
     notes: [{ id: 'n1', source: 'plug', year: t.y, month: t.m, text: 'เบียร์ลีโอ 8 ขวด', amount: 640, updatedAt: '' }],
-    docs: [{ id: 'doc1', title: 'กานดา 3 - 4', updatedAt: '', lines: [
+    docs: [{ id: 'doc1', title: 'กานดา 3 - 4', updatedAt: '', rows: [
       { label: 'ชั้น 1 แอร์', value: '3,800' }, { label: 'ชั้น 1 พัดลม', value: '2,800' },
-      { label: 'ค่าไฟ', value: 'หน่วยละ 8 บาท' }, { label: 'ค่าน้ำ', value: 'หน่วยละ 24 บาท' },
-      { label: 'โทร', value: '082-3638724' },
-    ] }],
+      { label: 'ชั้น 2 แอร์', value: '3,800' }, { label: 'ชั้น 2 พัดลม', value: '2,800' },
+      { label: 'ชั้น 3 พัดลม', value: '2,300' }, { label: 'ชั้น 4 พัดลม', value: '2,200' },
+      { label: 'ชั้น 5 พัดลม', value: '2,100' },
+    ], notes: ['ค่าไฟ หน่วยละ 8 บาท', 'ค่าน้ำ หน่วยละ 24 บาท', 'โทร. 082-3638724'] }],
     workers: [{ name: 'คนงาน 1', elecRate: 7, waterRate: 30 }],
     bills: [
       { id: 'b1', worker: 'คนงาน 1', year: 2569, month: 1, rent: 2000, eOld: 100, eNew: 145, wOld: 20, wNew: 24, extra: 0, note: '', paid: true },

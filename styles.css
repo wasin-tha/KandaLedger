@@ -678,24 +678,55 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .day-edit-foot b { font-size: 19px; color: var(--primary); font-variant-numeric: tabular-nums; }
 
 /* ============================================================
-   DOCS (เอกสารรวม) — รายการการ์ด + ตัวแก้หัวข้อ-ค่า
+   DOCS (เอกสาร) — แกลเลอรี + กระดาษพร้อมพิมพ์ + ตัวแก้
    ============================================================ */
-.doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-.doc-card { text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 8px; transition: border-color .12s, box-shadow .12s, transform .12s; font: inherit; color: inherit; }
-.doc-card:hover { border-color: var(--primary); box-shadow: 0 2px 10px rgba(30,64,175,.08); transform: translateY(-1px); }
-.doc-card .dc-title { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 15px; color: var(--text); }
-.doc-card .dc-title svg { width: 17px; height: 17px; color: var(--primary); flex: none; }
-.doc-card .dc-prev { display: flex; flex-direction: column; gap: 2px; }
-.dc-line { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--text-2); border-bottom: 1px dashed var(--border); padding-bottom: 2px; }
-.dc-line b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dc-more { font-size: 12px; color: var(--text-3); margin-top: 2px; }
-.dc-meta { font-size: 11.5px; color: var(--text-3); margin-top: auto; }
+/* --- "กระดาษ" หน้าเดียว (ใช้ทั้งย่อ/เต็ม/พิมพ์) --- */
+.paper { width: 100%; max-width: 460px; margin: 0 auto; background: #fff; color: #0f172a;
+  border: 1px solid var(--border); border-radius: 10px; padding: 26px 28px 30px;
+  box-shadow: 0 4px 18px rgba(15,23,42,.08); }
+.dp-title { text-align: center; font-size: 24px; font-weight: 700; letter-spacing: .5px; margin-bottom: 18px; color: #111827; }
+.dp-table { width: 100%; border-collapse: collapse; border: 1px solid #94a3b8; }
+.dp-table td { border: 1px solid #94a3b8; padding: 9px 14px; font-size: 16px; }
+.dp-table .dp-l { color: #111827; }
+.dp-table .dp-v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 38%; }
+.dp-notes { margin-top: 16px; text-align: center; }
+.dp-note { font-size: 15px; color: #1f2937; line-height: 1.7; }
 
+.doc-stage { display: flex; justify-content: center; padding: 8px 0 4px; }
+
+/* --- แกลเลอรี --- */
+.doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.doc-card { text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 0; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; transition: border-color .12s, box-shadow .12s, transform .12s; font: inherit; color: inherit; }
+.doc-card:hover { border-color: var(--primary); box-shadow: 0 4px 14px rgba(30,64,175,.12); transform: translateY(-2px); }
+.doc-thumb { height: 230px; overflow: hidden; background: #fff; border-bottom: 1px solid var(--border); padding: 10px 10px 0; pointer-events: none; }
+.doc-thumb .paper { max-width: none; box-shadow: none; border: none; padding: 6px 4px; border-radius: 0; }
+.doc-thumb .dp-title { font-size: 15px; margin-bottom: 8px; }
+.doc-thumb .dp-table td { padding: 3px 7px; font-size: 10.5px; }
+.doc-thumb .dp-note { font-size: 10px; line-height: 1.5; }
+.doc-thumb .dp-notes { margin-top: 8px; }
+.dc-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; }
+.dc-name { font-weight: 600; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-meta { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+
+/* --- ตัวแก้ --- */
 .doc-title-in { font-size: 18px; font-weight: 700; }
-.doc-lines { display: flex; flex-direction: column; gap: 8px; }
-.doc-line { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
-.doc-line .doc-l { font-weight: 600; }
-.doc-line .doc-v { font-variant-numeric: tabular-nums; }
+.doc-esec { border: 1px solid var(--border); border-radius: var(--r); padding: 14px; background: var(--surface-2); }
+.doc-esec-h { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; color: var(--text-2); margin-bottom: 10px; }
+.doc-esec-h svg { width: 16px; height: 16px; }
+.doc-erows, .doc-enotes { display: flex; flex-direction: column; gap: 8px; }
+.doc-erow { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; align-items: center; }
+.doc-erow .doc-ev { text-align: right; font-variant-numeric: tabular-nums; }
+.doc-enote { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 @media (max-width: 480px) {
-  .doc-line { grid-template-columns: 1fr 1fr auto; gap: 6px; }
+  .doc-erow { grid-template-columns: 1fr 100px auto; gap: 6px; }
+}
+
+/* --- พิมพ์เอกสาร (poster กลางหน้า A4) --- */
+@media print {
+  .doc-print { display: flex; justify-content: center; }
+  .doc-print .paper { box-shadow: none; border: none; max-width: 150mm; padding: 0; }
+  .doc-print .dp-title { font-size: 30px; margin-bottom: 24px; }
+  .doc-print .dp-table, .doc-print .dp-table td { border-color: #475569; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .doc-print .dp-table td { padding: 11px 16px; font-size: 18px; }
+  .doc-print .dp-note { font-size: 17px; }
 }
