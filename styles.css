@@ -695,6 +695,9 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .dp-table .dp-v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 28px; }
 
 .doc-stage { display: flex; justify-content: center; padding: 8px 0 4px; }
+/* view-preview + print ใช้ .doc-print เหมือนกัน → ขนาดเท่ากันเป๊ะ (WYSIWYG).
+   zoom 1.4 = ค่าสูงสุดที่ยังพิมพ์พอดี 1 หน้า (เทส headless: 1.42 พอดี, 1.45 ล้น) */
+.doc-print .paper { zoom: 1.4; }
 
 /* --- แกลเลอรี --- */
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }

@@ -1193,7 +1193,7 @@ function renderDocView(doc) {
         <button class="btn btn-accent btn-sm" onclick="printDocument('${esc(doc.id)}')">${svg('printer')} พิมพ์</button>
       </div>
     </div>
-    <div class="doc-stage mt4">${docPaperHtml(doc)}</div>
+    <div class="doc-stage mt4"><div class="doc-print">${docPaperHtml(doc)}</div></div>
   </div>`;
 }
 
