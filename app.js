@@ -144,6 +144,82 @@ function openModal(html, cls = '') { const b = $('#modalBox'); b.className = 'mo
 function closeModal() { $('#modalBg').classList.remove('show'); }
 $('#modalBg').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
+/* ---------- custom dropdown ----------
+   แทน native <select> ทุกตัวด้วย UI ของเราเอง (กางออกมาแต่งได้ ต่างจาก <select> ที่ list เป็นของ OS).
+   วิธี: ซ่อน <select> จริงไว้ (display:none) แต่คงไว้ใน DOM → value/#id/onchange เดิมใช้ได้หมด ไม่ต้องแก้ call site.
+   เมนูวางเป็น position:fixed บน body → ไม่โดน overflow:hidden ของ .blk ตัด */
+let _cselOpen = null;          // { sel, btn, menu }
+let _cselRAF = 0;
+function _cselClose() {
+  if (!_cselOpen) return;
+  _cselOpen.btn.classList.remove('open');
+  _cselOpen.menu.remove();
+  _cselOpen = null;
+}
+function _cselSync(sel, btn) {
+  const o = sel.options[sel.selectedIndex];
+  btn.querySelector('.csel-cur').textContent = o ? o.textContent : '';
+}
+function _cselOpenMenu(sel, btn) {
+  _cselClose();
+  const menu = document.createElement('div');
+  menu.className = 'csel-menu';
+  [...sel.options].forEach(opt => {
+    const it = document.createElement('div');
+    it.className = 'csel-opt' + (opt.selected ? ' on' : '');
+    it.textContent = opt.textContent;
+    if (opt.value && DOC_FONTS_INH && opt.value in DOC_FONTS_INH) it.style.fontFamily = `'${opt.value}',sans-serif`; // โชว์ฟอนต์จริงในรายการฟอนต์
+    it.onmousedown = e => {     // mousedown = ชนะ outside-close ที่ก็ฟัง mousedown
+      e.preventDefault();
+      if (sel.value !== opt.value) { sel.value = opt.value; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+      _cselSync(sel, btn);
+      _cselClose();
+    };
+    menu.appendChild(it);
+  });
+  document.body.appendChild(menu);
+  const r = btn.getBoundingClientRect();
+  menu.style.minWidth = r.width + 'px';
+  menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + 'px';
+  const below = innerHeight - r.bottom;
+  menu.style.top = (menu.offsetHeight + 8 > below && r.top > below ? r.top - menu.offsetHeight - 4 : r.bottom + 4) + 'px';
+  requestAnimationFrame(() => menu.classList.add('show'));
+  btn.classList.add('open');
+  const on = menu.querySelector('.csel-opt.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+  _cselOpen = { sel, btn, menu };
+}
+function enhanceSelects(root) {
+  $$('select:not([data-csel])', root).forEach(sel => {
+    sel.dataset.csel = '1';
+    const mini = sel.classList.contains('mini');
+    const wrap = document.createElement('span');
+    wrap.className = 'csel' + (mini ? ' csel-inline' : '');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'csel-btn ' + sel.className;
+    btn.style.cssText = sel.style.cssText;
+    if (sel.title) btn.title = sel.title;
+    btn.disabled = sel.disabled;
+    btn.innerHTML = `<span class="csel-cur"></span><svg class="csel-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+    btn.onclick = () => { (_cselOpen && _cselOpen.sel === sel) ? _cselClose() : _cselOpenMenu(sel, btn); };
+    sel.style.display = 'none';
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(btn);
+    wrap.appendChild(sel);
+    _cselSync(sel, btn);
+  });
+}
+new MutationObserver(() => {
+  if (_cselOpen && !document.contains(_cselOpen.btn)) _cselClose();
+  if (_cselRAF) return;
+  _cselRAF = requestAnimationFrame(() => { _cselRAF = 0; enhanceSelects(document.body); });
+}).observe(document.body, { childList: true, subtree: true });
+document.addEventListener('mousedown', e => { if (_cselOpen && !_cselOpen.menu.contains(e.target) && !_cselOpen.btn.contains(e.target)) _cselClose(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') _cselClose(); });
+addEventListener('scroll', _cselClose, true);
+addEventListener('resize', _cselClose);
+enhanceSelects(document.body);
+
 /* ============================================================
    Calculations
    ============================================================ */

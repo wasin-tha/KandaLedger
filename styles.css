@@ -226,6 +226,27 @@ h1, h2, h3, h4 { line-height: 1.25; font-weight: 600; color: var(--text); }
 .field.invalid .input { border-color: var(--danger); }
 .field.invalid .field-error { display: block; }
 
+/* ---------- custom dropdown (แทน native <select> ทั้งเว็บ) ---------- */
+.csel { position: relative; }
+.csel:not(.csel-inline) { display: block; width: 100%; }
+.csel.csel-inline { display: inline-flex; vertical-align: middle; }
+.csel-btn { display: inline-flex !important; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; }
+.csel:not(.csel-inline) .csel-btn { width: 100%; }
+.csel-btn:disabled { opacity: .5; cursor: default; }
+.csel-cur { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.csel-car { flex: none; width: 16px; height: 16px; opacity: .55; transition: transform .15s; }
+.csel-btn.open { border-color: var(--primary); box-shadow: 0 0 0 3px var(--ring); }
+.csel-btn.open .csel-car { transform: rotate(180deg); }
+.csel-menu { position: fixed; z-index: 9999; min-width: 120px; max-height: 290px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .18); padding: 5px;
+  opacity: 0; transform: translateY(-4px); transition: opacity .12s ease, transform .12s ease; }
+.csel-menu.show { opacity: 1; transform: none; }
+.csel-opt { padding: 8px 12px; border-radius: 7px; cursor: pointer; font-size: 14px; line-height: 1.35; color: var(--text); white-space: nowrap; }
+.csel-opt:hover { background: var(--surface-3); }
+.csel-opt.on { background: var(--primary); color: #fff; font-weight: 600; }
+@media print { .csel-menu { display: none !important; } }
+
 .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s3) var(--s4); }
 fieldset { border: none; }
 fieldset legend { font-size: 13px; font-weight: 700; color: var(--primary); margin-bottom: var(--s2); }
