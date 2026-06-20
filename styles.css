@@ -733,10 +733,9 @@ select.mini { padding: 3px 4px; max-width: 130px; }
   select.mini { max-width: 96px; }
 }
 
-/* --- พิมพ์เอกสาร (กระดาษกลางหน้า A4 + ขยายเต็มหน้าแบบโปสเตอร์) --- */
+/* --- พิมพ์เอกสาร: render กระดาษเหมือน preview เป๊ะ (WYSIWYG) — ไม่ zoom/scale --- */
 @media print {
   .doc-print { text-align: center; }
-  .doc-print .paper { display: inline-block; width: auto; max-width: none; box-shadow: none;
-    border: none; padding: 0; margin: 0; zoom: 1.8; }
+  .doc-print .paper { box-shadow: none; border: none; margin: 0 auto; }
   .doc-print .dp-table, .doc-print .dp-table td { border-color: #1f2937; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
