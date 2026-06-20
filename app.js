@@ -50,13 +50,14 @@ const IC = {
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>',
   camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="3.5"/>',
   grip: '<circle cx="9" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="15" cy="18" r="1.4"/>',
+  doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h2"/>',
 };
 const svg = (name, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[name] || ''}</svg>`;
 
 /* ---------- state ---------- */
 // role-based access: ผู้ใช้ใส่ PIN เดียว → server คืน me={role,caps,roomsRead,roomsWrite}
 // เก็บ PIN ใน localStorage = auto-login ข้ามการปิด/เปิดเบราว์เซอร์
-const MODULES = ['utility', 'purchase', 'rooms'];
+const MODULES = ['utility', 'purchase', 'rooms', 'docs'];
 const todayBE = () => { const n = new Date(); return { y: n.getFullYear() + 543, m: n.getMonth() + 1, d: n.getDate() }; };
 const _tb = todayBE();
 const S = {
@@ -64,10 +65,11 @@ const S = {
   pin: localStorage.getItem('kanda_pin') || '',
   me: null,                       // { role, label, caps, roomsRead, roomsWrite }
   theme: localStorage.getItem('kanda_theme') || 'light',
-  data: { workers: [], bills: [], rounds: [], items: [], images: [], products: [], rentals: [], rates: [], notes: [] },
+  data: { workers: [], bills: [], rounds: [], items: [], images: [], products: [], rentals: [], rates: [], notes: [], docs: [] },
   ui: {
     worker: null, fromIdx: 0, toIdx: 0, roundId: null, collapsedYears: new Set(), _initFor: null, newGroups: [], catalog: false, pasteGid: null, pasteRid: null, pastePid: null, roundSearch: '',
     roomY: _tb.y, roomM: _tb.m, roomD: _tb.d, roomSel: null,   // roomSel = source ('plug')
+    docDraft: null,   // เอกสารที่กำลังดู/แก้ (null = หน้ารายการ) { id, title, lines:[{label,value}] }
   },
   roomQueue: [],                  // คิว setRoom ที่รอส่ง (กันเน็ตหลุด)
   roomSync: 'ok',                 // ok | pending | syncing | offline
@@ -89,6 +91,7 @@ function allowedModules() {
   if (c.utilityRead || c.utilityWrite) a.push('utility');
   if (c.purchaseRead) a.push('purchase');
   if (c.rooms) a.push('rooms');
+  if (c.docs) a.push('docs');
   return a;
 }
 
@@ -240,6 +243,7 @@ function render() {
 
   if (S.module === 'utility') view.innerHTML = renderUtility();
   else if (S.module === 'purchase') view.innerHTML = renderPurchase();
+  else if (S.module === 'docs') view.innerHTML = renderDocs();
   else view.innerHTML = renderRooms();
 }
 
@@ -1071,6 +1075,120 @@ function errorView(msg) {
 }
 
 /* ============================================================
+   MODULE 4: DOCS (เอกสารรวม) — owner+plug ดู+แก้ได้ทั้งคู่
+   เอกสาร = ชื่อ + หลายบรรทัด {label, value} (ตารางหัวข้อ-ค่า)
+   ============================================================ */
+// เอกสารแรกตามรูป (ตารางค่าเช่ากานดา 3-4) — ใช้ prefill ตอนสร้างเอกสารแรก
+const KANDA_DOC_TEMPLATE = {
+  id: null, title: 'กานดา 3 - 4',
+  lines: [
+    { label: 'ชั้น 1 แอร์', value: '3,800' },
+    { label: 'ชั้น 1 พัดลม', value: '2,800' },
+    { label: 'ชั้น 2 แอร์', value: '3,800' },
+    { label: 'ชั้น 2 พัดลม', value: '2,800' },
+    { label: 'ชั้น 3 พัดลม', value: '2,300' },
+    { label: 'ชั้น 4 พัดลม', value: '2,200' },
+    { label: 'ชั้น 5 พัดลม', value: '2,100' },
+    { label: 'ค่าไฟ', value: 'หน่วยละ 8 บาท' },
+    { label: 'ค่าน้ำ', value: 'หน่วยละ 24 บาท' },
+    { label: 'โทร', value: '082-3638724' },
+  ],
+};
+
+function renderDocs() {
+  if (S.ui.docDraft) return renderDocEditor(S.ui.docDraft);
+  const docs = S.data.docs || [];
+  let h = `<div class="card card-pad">
+    <div class="toolbar between" style="align-items:center">
+      <div class="section-title">${svg('doc')} เอกสารรวม</div>
+      <button class="btn btn-primary btn-sm no-print" onclick="newDoc()">${svg('plus')} เพิ่มเอกสาร</button>
+    </div>`;
+  if (!docs.length) {
+    h += panelEmpty('doc', 'ยังไม่มีเอกสาร', 'ทุกคน (เจ้าของ + ปลั๊ก) เพิ่มและแก้เอกสารร่วมกันได้') +
+      `<div class="mt4" style="text-align:center"><button class="btn btn-primary" onclick="newDoc('kanda')">${svg('plus')} สร้างเอกสาร กานดา 3-4</button></div>`;
+  } else {
+    h += '<div class="doc-grid mt4">';
+    docs.forEach(doc => {
+      const prev = (doc.lines || []).slice(0, 5)
+        .map(l => `<div class="dc-line"><span>${esc(l.label)}</span><b>${esc(l.value)}</b></div>`).join('');
+      const more = (doc.lines || []).length > 5 ? `<div class="dc-more">+${doc.lines.length - 5} รายการ</div>` : '';
+      h += `<button class="doc-card" onclick="openDoc('${esc(doc.id)}')">
+        <div class="dc-title">${svg('doc')} ${esc(doc.title || '(ไม่มีชื่อ)')}</div>
+        <div class="dc-prev">${prev || '<span class="dim">ว่าง</span>'}${more}</div>
+        ${doc.updatedAt ? `<div class="dc-meta">แก้ล่าสุด ${esc(doc.updatedAt)}</div>` : ''}
+      </button>`;
+    });
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function renderDocEditor(d) {
+  const lines = (d.lines || []).map((l, i) => `
+    <div class="doc-line">
+      <input class="input doc-l" value="${esc(l.label)}" placeholder="หัวข้อ" oninput="docSet(${i},'label',this.value)">
+      <input class="input doc-v" value="${esc(l.value)}" placeholder="ข้อมูล" oninput="docSet(${i},'value',this.value)">
+      <button class="btn btn-icon btn-ghost btn-sm" title="ลบแถว" onclick="docDelLine(${i})">${svg('trash')}</button>
+    </div>`).join('');
+  return `<div class="card card-pad">
+    <div class="toolbar between" style="align-items:center">
+      <button class="btn btn-ghost btn-sm" onclick="closeDoc()">${svg('back')} กลับ</button>
+      <div class="row">
+        ${d.id ? `<button class="btn btn-danger btn-sm" onclick="deleteDocPrompt()">${svg('trash')} ลบเอกสาร</button>` : ''}
+        <button class="btn btn-primary btn-sm" id="docSaveBtn" onclick="saveDoc()">${svg('check')} บันทึก</button>
+      </div>
+    </div>
+    <div class="field mt4"><label>ชื่อเอกสาร</label>
+      <input class="input doc-title-in" value="${esc(d.title)}" placeholder="เช่น กานดา 3 - 4" oninput="docSetTitle(this.value)"></div>
+    <div class="doc-lines mt4">${lines}</div>
+    <div class="mt4"><button class="btn btn-ghost btn-sm" onclick="docAddLine()">${svg('plus')} เพิ่มแถว</button></div>
+  </div>`;
+}
+
+function newDoc(tpl) {
+  S.ui.docDraft = tpl === 'kanda'
+    ? JSON.parse(JSON.stringify(KANDA_DOC_TEMPLATE))
+    : { id: null, title: '', lines: [{ label: '', value: '' }] };
+  render();
+}
+function openDoc(id) {
+  const doc = (S.data.docs || []).find(x => x.id === id);
+  if (!doc) return;
+  S.ui.docDraft = { id: doc.id, title: doc.title || '', lines: (doc.lines || []).map(l => ({ label: l.label || '', value: l.value || '' })) };
+  render();
+}
+function closeDoc() { S.ui.docDraft = null; render(); }
+function docSetTitle(v) { if (S.ui.docDraft) S.ui.docDraft.title = v; }
+function docSet(i, f, v) { const d = S.ui.docDraft; if (d && d.lines[i]) d.lines[i][f] = v; }
+function docAddLine() { const d = S.ui.docDraft; if (d) { d.lines.push({ label: '', value: '' }); render(); } }
+function docDelLine(i) { const d = S.ui.docDraft; if (d) { d.lines.splice(i, 1); render(); } }
+
+async function saveDoc() {
+  const d = S.ui.docDraft; if (!d) return;
+  const title = (d.title || '').trim();
+  if (!title) { toast('ใส่ชื่อเอกสารก่อน', 'err'); return; }
+  const lines = (d.lines || [])
+    .map(l => ({ label: (l.label || '').trim(), value: (l.value || '').trim() }))
+    .filter(l => l.label || l.value);
+  const body = JSON.stringify({ lines });
+  let ok = false;
+  await withBusy('docSaveBtn', async () => {
+    if (d.id) await api.post('updateDoc', { id: d.id, title, body });
+    else await api.post('addDoc', { title, body });
+    ok = true;
+  }, 'กำลังบันทึก');
+  if (ok) { S.ui.docDraft = null; toast('บันทึกเอกสารแล้ว', 'ok'); render(); }
+}
+function deleteDocPrompt() {
+  const d = S.ui.docDraft; if (!d || !d.id) return;
+  confirmDialog(`ลบเอกสาร "${d.title}" ?`, async () => {
+    await api.post('deleteDoc', { id: d.id });
+    S.ui.docDraft = null; toast('ลบเอกสารแล้ว', 'ok'); render();
+  }, { danger: true, label: 'ลบ', icon: 'trash' });
+}
+
+/* ============================================================
    EVENT HANDLERS (exposed on window)
    ============================================================ */
 async function withBusy(btnId, fn, label) {
@@ -1117,7 +1235,7 @@ $('#moduleSeg').addEventListener('click', e => {
   if (HAS_BACKEND && !loggedIn()) return;   // ยังไม่ล็อกอิน → ไม่สลับโมดูล
   const b = e.target.closest('button'); if (!b || b.hidden) return;
   if (!allowedModules().includes(b.dataset.module)) return;
-  S.module = b.dataset.module; S.ui.roundId = null; S.ui.catalog = false;
+  S.module = b.dataset.module; S.ui.roundId = null; S.ui.catalog = false; S.ui.docDraft = null;
   localStorage.setItem('kanda_module', S.module);   // จำแท็บล่าสุด
   render();
 });
@@ -1639,13 +1757,14 @@ Object.assign(window, {
   updateProduct, deleteProductPrompt, pickProductImage, deleteProductImage, armProductPaste,
   printUtility, printRound, submitEntry, closeModal,
   roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, openRoomReport,
+  newDoc, openDoc, closeDoc, docSetTitle, docSet, docAddLine, docDelLine, saveDoc, deleteDocPrompt,
 });
 
 /* ============================================================
    DEMO data (used only when backend not configured)
    ============================================================ */
 function demoMe() {
-  return { role: 'owner', label: 'เจ้าของ (เดโม)', caps: { utilityRead: 1, utilityWrite: 1, purchaseRead: 1, purchaseWrite: 1, purchaseDone: 1, rooms: 1, rates: 1 }, roomsRead: ['plug'], roomsWrite: ['plug'] };
+  return { role: 'owner', label: 'เจ้าของ (เดโม)', caps: { utilityRead: 1, utilityWrite: 1, purchaseRead: 1, purchaseWrite: 1, purchaseDone: 1, rooms: 1, rates: 1, docs: 1 }, roomsRead: ['plug'], roomsWrite: ['plug'] };
 }
 function demoData() {
   const t = todayBE();
@@ -1656,6 +1775,11 @@ function demoData() {
       { id: 'rt4', source: 'plug', year: t.y, month: t.m, day: t.d, room: 3, temp: 1, overnight: 0, updatedAt: '' },
     ],
     notes: [{ id: 'n1', source: 'plug', year: t.y, month: t.m, text: 'เบียร์ลีโอ 8 ขวด', amount: 640, updatedAt: '' }],
+    docs: [{ id: 'doc1', title: 'กานดา 3 - 4', updatedAt: '', lines: [
+      { label: 'ชั้น 1 แอร์', value: '3,800' }, { label: 'ชั้น 1 พัดลม', value: '2,800' },
+      { label: 'ค่าไฟ', value: 'หน่วยละ 8 บาท' }, { label: 'ค่าน้ำ', value: 'หน่วยละ 24 บาท' },
+      { label: 'โทร', value: '082-3638724' },
+    ] }],
     workers: [{ name: 'คนงาน 1', elecRate: 7, waterRate: 30 }],
     bills: [
       { id: 'b1', worker: 'คนงาน 1', year: 2569, month: 1, rent: 2000, eOld: 100, eNew: 145, wOld: 20, wNew: 24, extra: 0, note: '', paid: true },
