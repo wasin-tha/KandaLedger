@@ -1318,7 +1318,7 @@ function renderBlockEdit(b, i, total) {
   else if (b.type === 'spacer') body = `<label class="dim" style="display:flex;gap:8px;align-items:center">เว้นช่องสูง <input class="input" type="number" style="max-width:90px" value="${num(b.height) || 16}" oninput="blkInput(${i},'height',this.value)"> px</label>`;
   else if (b.type === 'table') {
     const { cols, rows } = tableModel(b);
-    const gt = `grid-template-columns:repeat(${cols},minmax(56px,1fr)) auto`;
+    const gt = `grid-template-columns:repeat(${cols},minmax(56px,1fr)) 38px`; // คอลัมน์ท้าย = กว้างเท่าปุ่มถังขยะ (.btn-icon) → หัว(✕)กับแถวข้อมูลตรงกัน
     const head = `<div class="doc-etrow doc-ethead" style="${gt}">${
       Array.from({ length: cols }, (_, c) => `<button class="mini danger" title="ลบคอลัมน์นี้" onclick="blkDelCol(${i},${c})" ${cols <= 1 ? 'disabled' : ''}>✕</button>`).join('')
       }<span></span></div>`;
