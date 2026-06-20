@@ -680,17 +680,19 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 /* ============================================================
    DOCS (เอกสาร) — แกลเลอรี + กระดาษพร้อมพิมพ์ + ตัวแก้
    ============================================================ */
-/* --- "กระดาษ" หน้าเดียว (ใช้ทั้งย่อ/เต็ม/พิมพ์) --- */
+/* --- "กระดาษ" หน้าเดียว = บล็อกเรียงกัน (ใช้ทั้งย่อ/เต็ม/พิมพ์/พรีวิว) --- */
 .paper { width: 100%; max-width: 460px; margin: 0 auto; background: #fff; color: #0f172a;
-  border: 1px solid var(--border); border-radius: 10px; padding: 26px 28px 30px;
+  border: 1px solid var(--border); border-radius: 10px; padding: 28px 30px 32px;
   box-shadow: 0 4px 18px rgba(15,23,42,.08); }
-.dp-title { text-align: center; font-size: 24px; font-weight: 700; letter-spacing: .5px; margin-bottom: 18px; color: #111827; }
-.dp-table { width: 100%; border-collapse: collapse; border: 1px solid #94a3b8; }
-.dp-table td { border: 1px solid #94a3b8; padding: 9px 14px; font-size: 16px; }
-.dp-table .dp-l { color: #111827; }
-.dp-table .dp-v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 38%; }
-.dp-notes { margin-top: 16px; text-align: center; }
-.dp-note { font-size: 15px; color: #1f2937; line-height: 1.7; }
+.paper .pb { margin-bottom: 12px; line-height: 1.5; }
+.paper .pb:last-child { margin-bottom: 0; }
+.pb-h { font-weight: 700; letter-spacing: .3px; }
+.pb-t { color: #1f2937; }
+.pb-div { border: none; border-top: 1px solid #94a3b8; margin: 12px 0; }
+.dp-table { display: inline-block; border-collapse: collapse; border: 1px solid #475569; }
+.dp-table.noborder, .dp-table.noborder td { border: none; }
+.dp-table td { border: 1px solid #475569; padding: 8px 16px; }
+.dp-table .dp-v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 28px; }
 
 .doc-stage { display: flex; justify-content: center; padding: 8px 0 4px; }
 
@@ -698,35 +700,43 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
 .doc-card { text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 0; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; transition: border-color .12s, box-shadow .12s, transform .12s; font: inherit; color: inherit; }
 .doc-card:hover { border-color: var(--primary); box-shadow: 0 4px 14px rgba(30,64,175,.12); transform: translateY(-2px); }
-.doc-thumb { height: 230px; overflow: hidden; background: #fff; border-bottom: 1px solid var(--border); padding: 10px 10px 0; pointer-events: none; }
-.doc-thumb .paper { max-width: none; box-shadow: none; border: none; padding: 6px 4px; border-radius: 0; }
-.doc-thumb .dp-title { font-size: 15px; margin-bottom: 8px; }
-.doc-thumb .dp-table td { padding: 3px 7px; font-size: 10.5px; }
-.doc-thumb .dp-note { font-size: 10px; line-height: 1.5; }
-.doc-thumb .dp-notes { margin-top: 8px; }
+.doc-thumb { height: 240px; overflow: hidden; background: #fff; border-bottom: 1px solid var(--border); padding: 12px 12px 0; pointer-events: none; }
+.doc-thumb .paper { max-width: none; box-shadow: none; border: none; padding: 0; border-radius: 0; transform: scale(.92); transform-origin: top center; }
+.doc-thumb .pb { margin-bottom: 7px; }
 .dc-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; }
 .dc-name { font-weight: 600; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dc-meta { font-size: 11px; color: var(--text-3); white-space: nowrap; }
 
-/* --- ตัวแก้ --- */
-.doc-title-in { font-size: 18px; font-weight: 700; }
-.doc-esec { border: 1px solid var(--border); border-radius: var(--r); padding: 14px; background: var(--surface-2); }
-.doc-esec-h { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; color: var(--text-2); margin-bottom: 10px; }
+/* --- ตัวแก้แบบบล็อก --- */
+.doc-esec-h { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; color: var(--text-2); }
 .doc-esec-h svg { width: 16px; height: 16px; }
-.doc-erows, .doc-enotes { display: flex; flex-direction: column; gap: 8px; }
+.doc-edit-top { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.doc-edit-top .field { min-width: 160px; }
+.blk-list { display: flex; flex-direction: column; gap: 10px; }
+.blk { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); overflow: hidden; }
+.blk-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 10px; background: var(--surface-3); border-bottom: 1px solid var(--border); }
+.blk-type { font-weight: 700; font-size: 12.5px; color: var(--text-2); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 9px; }
+.blk-bar .grow { flex: 1; }
+.blk-body { padding: 12px; }
+.mini { font: inherit; font-size: 12.5px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; min-height: 28px; }
+select.mini { padding: 3px 4px; max-width: 130px; }
+.mini:hover { border-color: var(--border-strong); }
+.mini.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+.mini.danger:hover { background: var(--danger-50); border-color: var(--danger); color: var(--danger); }
+.mini:disabled { opacity: .4; cursor: default; }
+.blk-add { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.doc-erows { display: flex; flex-direction: column; gap: 8px; }
 .doc-erow { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; align-items: center; }
 .doc-erow .doc-ev { text-align: right; font-variant-numeric: tabular-nums; }
-.doc-enote { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 @media (max-width: 480px) {
   .doc-erow { grid-template-columns: 1fr 100px auto; gap: 6px; }
+  select.mini { max-width: 96px; }
 }
 
-/* --- พิมพ์เอกสาร (poster กลางหน้า A4) --- */
+/* --- พิมพ์เอกสาร (กระดาษกลางหน้า A4 + ขยายเต็มหน้าแบบโปสเตอร์) --- */
 @media print {
-  .doc-print { display: flex; justify-content: center; }
-  .doc-print .paper { box-shadow: none; border: none; max-width: 150mm; padding: 0; }
-  .doc-print .dp-title { font-size: 30px; margin-bottom: 24px; }
-  .doc-print .dp-table, .doc-print .dp-table td { border-color: #475569; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .doc-print .dp-table td { padding: 11px 16px; font-size: 18px; }
-  .doc-print .dp-note { font-size: 17px; }
+  .doc-print { text-align: center; }
+  .doc-print .paper { display: inline-block; width: auto; max-width: none; box-shadow: none;
+    border: none; padding: 0; margin: 0; zoom: 1.8; }
+  .doc-print .dp-table, .doc-print .dp-table td { border-color: #1f2937; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

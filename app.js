@@ -1075,38 +1075,81 @@ function errorView(msg) {
 }
 
 /* ============================================================
-   MODULE 4: DOCS (เอกสาร) — แกลเลอรีเอกสารพร้อมพิมพ์ (owner+plug ดู+แก้)
-   เอกสาร 1 ใบ = "กระดาษ" หน้าตาเหมือนใบติดประกาศ: ชื่อ + ตารางราคา + หมายเหตุ
-   body (เก็บใน Sheet) = JSON { rows:[{label,value}], notes:[string] }
+   MODULE 4: DOCS (เอกสาร) — แกลเลอรีเอกสารพร้อมพิมพ์ แบบ "บล็อก" (owner+plug)
+   เอกสาร 1 ใบ = กระดาษ A4 ที่ประกอบด้วยบล็อกหลายชนิด เรียง/จัด/เลือกฟอนต์ได้
+   body (เก็บใน Sheet) = JSON { font, blocks:[ ... ] }
+   block: { type:'heading'|'text'|'table'|'divider'|'spacer', text, align, size, color, bold, font, rows[], border, height }
    ============================================================ */
-// เอกสารแรกตามรูป (ตารางค่าเช่ากานดา 3-4) — ปุ่ม "สร้างเอกสาร กานดา 3-4" ใช้ตัวนี้
+const DOC_FONTS = [
+  { id: 'Sarabun', label: 'Sarabun' }, { id: 'Noto Sans Thai', label: 'Noto Sans Thai' },
+  { id: 'Prompt', label: 'Prompt' }, { id: 'Kanit', label: 'Kanit' }, { id: 'Mitr', label: 'Mitr' },
+  { id: 'Pridi', label: 'Pridi (มีหัว)' }, { id: 'Chonburi', label: 'Chonburi (ป้าย)' }, { id: 'Charmonman', label: 'Charmonman (ลายมือ)' },
+];
+const DOC_FONTS_INH = [{ id: '', label: 'ฟอนต์ตามเอกสาร' }].concat(DOC_FONTS);
+const DOC_SIZES = [{ id: 'sm', label: 'เล็ก' }, { id: 'md', label: 'ปกติ' }, { id: 'lg', label: 'ใหญ่' }, { id: 'xl', label: 'ใหญ่มาก' }, { id: 'xxl', label: 'ใหญ่สุด' }];
+const DOC_SIZE_PX = { sm: 15, md: 19, lg: 26, xl: 34, xxl: 44 };
+const DOC_ALIGNS = [{ id: 'left', label: 'ชิดซ้าย' }, { id: 'center', label: 'กึ่งกลาง' }, { id: 'right', label: 'ชิดขวา' }];
+const DOC_COLORS = [{ id: '', label: 'สีปกติ' }, { id: '#c0392b', label: 'แดง' }, { id: '#1d4ed8', label: 'น้ำเงิน' }, { id: '#15803d', label: 'เขียว' }, { id: '#b45309', label: 'ส้ม' }];
+
+// เอกสารแรกตามรูป (ค่าเช่ากานดา 3-4) — ปุ่ม "สร้างเอกสาร กานดา 3-4" ใช้ตัวนี้
 const KANDA_DOC_TEMPLATE = {
-  id: null, title: 'กานดา 3 - 4',
-  rows: [
-    { label: 'ชั้น 1 แอร์', value: '3,800' },
-    { label: 'ชั้น 1 พัดลม', value: '2,800' },
-    { label: 'ชั้น 2 แอร์', value: '3,800' },
-    { label: 'ชั้น 2 พัดลม', value: '2,800' },
-    { label: 'ชั้น 3 พัดลม', value: '2,300' },
-    { label: 'ชั้น 4 พัดลม', value: '2,200' },
-    { label: 'ชั้น 5 พัดลม', value: '2,100' },
+  id: null, title: 'กานดา 3 - 4', font: 'Sarabun',
+  blocks: [
+    { type: 'heading', text: 'ติดต่อห้องพัก', align: 'center', size: 'md', color: '#c0392b', bold: true },
+    { type: 'heading', text: 'กานดา 3 - 4', align: 'center', size: 'xl', bold: true },
+    { type: 'table', align: 'center', size: 'lg', border: true, rows: [
+      { label: 'ชั้น 1 แอร์', value: '3,800' }, { label: 'ชั้น 1 พัดลม', value: '2,800' },
+      { label: 'ชั้น 2 แอร์', value: '3,800' }, { label: 'ชั้น 2 พัดลม', value: '2,800' },
+      { label: 'ชั้น 3 พัดลม', value: '2,300' }, { label: 'ชั้น 4 พัดลม', value: '2,200' },
+      { label: 'ชั้น 5 พัดลม', value: '2,100' },
+    ] },
+    { type: 'text', text: 'ค่าไฟ หน่วยละ 8 บาท', align: 'center', size: 'md' },
+    { type: 'text', text: 'ค่าน้ำ หน่วยละ 24 บาท', align: 'center', size: 'md' },
+    { type: 'text', text: 'โทร. 082-3638724', align: 'center', size: 'md', color: '#c0392b', bold: true },
+    { type: 'text', text: 'ป้ากลม', align: 'right', size: 'sm', color: '#1d4ed8' },
   ],
-  notes: ['ค่าไฟ หน่วยละ 8 บาท', 'ค่าน้ำ หน่วยละ 24 บาท', 'โทร. 082-3638724'],
 };
 const docClone = d => JSON.parse(JSON.stringify(d));
 const findDoc = id => (S.data.docs || []).find(d => d.id === id) || null;
+const blockDefault = type => ({
+  heading: { type: 'heading', text: '', align: 'center', size: 'lg', bold: true },
+  text: { type: 'text', text: '', align: 'center', size: 'md' },
+  table: { type: 'table', align: 'center', size: 'md', border: true, rows: [{ label: '', value: '' }] },
+  divider: { type: 'divider' },
+  spacer: { type: 'spacer', height: 16 },
+}[type]);
 
-// "กระดาษ" หน้าเดียว — ใช้ทั้งในแกลเลอรี (ย่อ), หน้าดูเต็ม, และตอนพิมพ์
+/* ---- การ render "กระดาษ" (ใช้ทั้งย่อ/เต็ม/พิมพ์/พรีวิว) ---- */
+const escMulti = s => esc(s).replace(/\n/g, '<br>');
+function blockStyle(b) {
+  const px = DOC_SIZE_PX[b.size] || (b.type === 'heading' ? 26 : 19);
+  let s = `text-align:${b.align || 'center'};font-size:${px}px;`;
+  if (b.color) s += `color:${b.color};`;
+  if (b.bold) s += 'font-weight:700;';
+  if (b.italic) s += 'font-style:italic;';
+  if (b.underline) s += 'text-decoration:underline;';
+  if (b.font) s += `font-family:'${b.font}',sans-serif;`;
+  return s;
+}
+function renderBlockView(b) {
+  switch (b.type) {
+    case 'heading': return `<div class="pb pb-h" style="${blockStyle(b)}">${escMulti(b.text || '')}</div>`;
+    case 'text': return `<div class="pb pb-t" style="${blockStyle(b)}">${escMulti(b.text || '') || '&nbsp;'}</div>`;
+    case 'divider': return `<hr class="pb-div">`;
+    case 'spacer': return `<div style="height:${num(b.height) || 16}px"></div>`;
+    case 'table': {
+      const rowsH = (b.rows || []).map(r => `<tr><td class="dp-l">${esc(r.label)}</td><td class="dp-v">${esc(r.value)}</td></tr>`).join('');
+      const px = DOC_SIZE_PX[b.size] || 18;
+      const fst = b.font ? `font-family:'${b.font}',sans-serif;` : '';
+      return `<div class="pb" style="text-align:${b.align || 'center'}"><table class="dp-table${b.border === false ? ' noborder' : ''}" style="font-size:${px}px;${fst}">${rowsH}</table></div>`;
+    }
+    default: return '';
+  }
+}
 function docPaperHtml(doc) {
-  const rowsH = (doc.rows || []).map(r =>
-    `<tr><td class="dp-l">${esc(r.label)}</td><td class="dp-v">${esc(r.value)}</td></tr>`).join('');
-  const notesH = (doc.notes || []).filter(n => String(n).trim())
-    .map(n => `<div class="dp-note">${esc(n)}</div>`).join('');
-  return `<div class="paper">
-    <div class="dp-title">${esc(doc.title || '')}</div>
-    ${rowsH ? `<table class="dp-table">${rowsH}</table>` : ''}
-    ${notesH ? `<div class="dp-notes">${notesH}</div>` : ''}
-  </div>`;
+  const font = doc.font || 'Sarabun';
+  const blocks = (doc.blocks || []).map(renderBlockView).join('');
+  return `<div class="paper" style="font-family:'${font}',sans-serif">${blocks || '<div class="pb pb-t" style="text-align:center;color:#94a3b8">เอกสารว่าง</div>'}</div>`;
 }
 
 function renderDocs() {
@@ -1154,36 +1197,81 @@ function renderDocView(doc) {
   </div>`;
 }
 
+/* ---- ตัวแก้แบบบล็อก ---- */
+function optset(opts, cur) { return opts.map(o => `<option value="${esc(o.id)}" ${o.id === (cur || '') ? 'selected' : ''}>${esc(o.label)}</option>`).join(''); }
+
+function renderBlockEdit(b, i, total) {
+  const isText = b.type === 'heading' || b.type === 'text';
+  const isTbl = b.type === 'table';
+  const fmt = (isText || isTbl) ? `
+      <select class="mini" title="จัดตำแหน่ง" onchange="blkSet(${i},'align',this.value)">${optset(DOC_ALIGNS, b.align || 'center')}</select>
+      <select class="mini" title="ขนาด" onchange="blkSet(${i},'size',this.value)">${optset(DOC_SIZES, b.size || 'md')}</select>
+      <select class="mini" title="ฟอนต์" onchange="blkSet(${i},'font',this.value)">${optset(DOC_FONTS_INH, b.font || '')}</select>` : '';
+  const fmt2 = isText ? `
+      <select class="mini" title="สี" onchange="blkSet(${i},'color',this.value)">${optset(DOC_COLORS, b.color || '')}</select>
+      <button class="mini ${b.bold ? 'on' : ''}" title="ตัวหนา" onclick="blkSet(${i},'bold',${b.bold ? 'false' : 'true'})">B</button>
+      <button class="mini ${b.italic ? 'on' : ''}" title="ตัวเอียง" onclick="blkSet(${i},'italic',${b.italic ? 'false' : 'true'})" style="font-style:italic">I</button>
+      <button class="mini ${b.underline ? 'on' : ''}" title="ขีดเส้นใต้" onclick="blkSet(${i},'underline',${b.underline ? 'false' : 'true'})" style="text-decoration:underline">U</button>` : '';
+  const tblBtn = isTbl ? `<button class="mini ${b.border === false ? '' : 'on'}" title="เส้นตาราง" onclick="blkSet(${i},'border',${b.border === false ? 'true' : 'false'})">▦</button>` : '';
+
+  let body = '';
+  if (b.type === 'heading') body = `<input class="input" value="${esc(b.text || '')}" placeholder="ข้อความหัวข้อ" oninput="blkInput(${i},'text',this.value)">`;
+  else if (b.type === 'text') body = `<textarea class="input" rows="2" placeholder="ข้อความ (ขึ้นบรรทัดใหม่ได้)" oninput="blkInput(${i},'text',this.value)">${esc(b.text || '')}</textarea>`;
+  else if (b.type === 'divider') body = `<div class="dim" style="text-align:center">— เส้นคั่น —</div>`;
+  else if (b.type === 'spacer') body = `<label class="dim" style="display:flex;gap:8px;align-items:center">เว้นช่องสูง <input class="input" type="number" style="max-width:90px" value="${num(b.height) || 16}" oninput="blkInput(${i},'height',this.value)"> px</label>`;
+  else if (b.type === 'table') {
+    const rs = (b.rows || []).map((r, j) => `
+      <div class="doc-erow">
+        <input class="input" value="${esc(r.label)}" placeholder="รายการ" oninput="blkCell(${i},${j},'label',this.value)">
+        <input class="input doc-ev" value="${esc(r.value)}" placeholder="ค่า/ราคา" oninput="blkCell(${i},${j},'value',this.value)">
+        <button class="btn btn-icon btn-ghost btn-sm" title="ลบแถว" onclick="blkDelRow(${i},${j})">${svg('trash')}</button>
+      </div>`).join('');
+    body = `<div class="doc-erows">${rs || '<p class="dim">ยังไม่มีแถว</p>'}</div>
+      <button class="btn btn-ghost btn-sm mt4" onclick="blkAddRow(${i})">${svg('plus')} เพิ่มแถว</button>`;
+  }
+  return `<div class="blk">
+    <div class="blk-bar">
+      <span class="blk-type">${BLK_LABEL[b.type] || b.type}</span>
+      <span class="grow"></span>
+      ${fmt}${fmt2}${tblBtn}
+      <button class="mini" title="เลื่อนขึ้น" onclick="blkMove(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+      <button class="mini" title="เลื่อนลง" onclick="blkMove(${i},1)" ${i === total - 1 ? 'disabled' : ''}>▼</button>
+      <button class="mini danger" title="ลบบล็อก" onclick="blkDel(${i})">✕</button>
+    </div>
+    <div class="blk-body">${body}</div>
+  </div>`;
+}
+const BLK_LABEL = { heading: 'หัวข้อ', text: 'ข้อความ', table: 'ตาราง', divider: 'เส้นคั่น', spacer: 'เว้นช่อง' };
+
 function renderDocEditor(d) {
-  const rowsH = (d.rows || []).map((r, i) => `
-    <div class="doc-erow">
-      <input class="input" value="${esc(r.label)}" placeholder="รายการ (เช่น ชั้น 1 แอร์)" oninput="docSetRow(${i},'label',this.value)">
-      <input class="input doc-ev" value="${esc(r.value)}" placeholder="ราคา/ค่า" oninput="docSetRow(${i},'value',this.value)">
-      <button class="btn btn-icon btn-ghost btn-sm" title="ลบแถว" onclick="docDelRow(${i})">${svg('trash')}</button>
-    </div>`).join('');
-  const notesH = (d.notes || []).map((n, i) => `
-    <div class="doc-enote">
-      <input class="input" value="${esc(n)}" placeholder="หมายเหตุ (เช่น ค่าไฟ หน่วยละ 8 บาท)" oninput="docSetNote(${i},this.value)">
-      <button class="btn btn-icon btn-ghost btn-sm" title="ลบ" onclick="docDelNote(${i})">${svg('trash')}</button>
-    </div>`).join('');
-  return `<div class="card card-pad">
-    <div class="toolbar between" style="align-items:center">
-      <button class="btn btn-ghost btn-sm" onclick="cancelDocEdit()">${svg('back')} ยกเลิก</button>
-      <button class="btn btn-primary btn-sm" id="docSaveBtn" onclick="saveDoc()">${svg('check')} บันทึก</button>
-    </div>
-    <div class="field mt4"><label>ชื่อเอกสาร</label>
-      <input class="input doc-title-in" value="${esc(d.title)}" placeholder="เช่น กานดา 3 - 4" oninput="docSetTitle(this.value)"></div>
+  const blocksH = (d.blocks || []).map((b, i) => renderBlockEdit(b, i, d.blocks.length)).join('');
+  return `<div class="doc-edit">
+    <div class="card card-pad">
+      <div class="toolbar between" style="align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="cancelDocEdit()">${svg('back')} ยกเลิก</button>
+        <button class="btn btn-primary btn-sm" id="docSaveBtn" onclick="saveDoc()">${svg('check')} บันทึก</button>
+      </div>
+      <div class="doc-edit-top mt4">
+        <div class="field grow"><label>ชื่อเอกสาร (ใช้ในแกลเลอรี)</label>
+          <input class="input" value="${esc(d.title)}" placeholder="เช่น กานดา 3 - 4" oninput="docSetName(this.value)"></div>
+        <div class="field"><label>ฟอนต์หลัก</label>
+          <select class="input" onchange="docSetFont(this.value)">${optset(DOC_FONTS, d.font || 'Sarabun')}</select></div>
+      </div>
 
-    <div class="doc-esec mt4">
-      <div class="doc-esec-h">${svg('receipt')} ตารางราคา</div>
-      <div class="doc-erows">${rowsH || '<p class="dim">ยังไม่มีแถว</p>'}</div>
-      <button class="btn btn-ghost btn-sm mt4" onclick="docAddRow()">${svg('plus')} เพิ่มแถวราคา</button>
+      <div class="blk-list mt4">${blocksH}</div>
+      <div class="blk-add mt4">
+        <span class="dim">เพิ่มบล็อก:</span>
+        <button class="btn btn-ghost btn-sm" onclick="addBlock('heading')">${svg('plus')} หัวข้อ</button>
+        <button class="btn btn-ghost btn-sm" onclick="addBlock('text')">${svg('plus')} ข้อความ</button>
+        <button class="btn btn-ghost btn-sm" onclick="addBlock('table')">${svg('plus')} ตาราง</button>
+        <button class="btn btn-ghost btn-sm" onclick="addBlock('divider')">${svg('plus')} เส้นคั่น</button>
+        <button class="btn btn-ghost btn-sm" onclick="addBlock('spacer')">${svg('plus')} เว้นช่อง</button>
+      </div>
     </div>
 
-    <div class="doc-esec mt4">
-      <div class="doc-esec-h">${svg('edit')} หมายเหตุ (บรรทัดล่าง)</div>
-      <div class="doc-enotes">${notesH || '<p class="dim">ยังไม่มีหมายเหตุ</p>'}</div>
-      <button class="btn btn-ghost btn-sm mt4" onclick="docAddNote()">${svg('plus')} เพิ่มหมายเหตุ</button>
+    <div class="card card-pad mt4">
+      <div class="doc-esec-h">${svg('doc')} ตัวอย่าง (พรีวิว)</div>
+      <div class="doc-stage mt4">${docPaperHtml(d)}</div>
     </div>
   </div>`;
 }
@@ -1191,32 +1279,44 @@ function renderDocEditor(d) {
 /* ---- docs handlers ---- */
 function newDoc(tpl) {
   S.ui.docId = null;
-  S.ui.docDraft = tpl === 'kanda' ? docClone(KANDA_DOC_TEMPLATE) : { id: null, title: '', rows: [{ label: '', value: '' }], notes: [''] };
+  S.ui.docDraft = tpl === 'kanda' ? docClone(KANDA_DOC_TEMPLATE)
+    : { id: null, title: '', font: 'Sarabun', blocks: [{ type: 'heading', text: '', align: 'center', size: 'xl', bold: true }] };
   render();
 }
 function openDoc(id) { S.ui.docId = id; S.ui.docDraft = null; render(); }
 function backToDocs() { S.ui.docId = null; S.ui.docDraft = null; render(); }
 function editDoc(id) {
   const doc = findDoc(id); if (!doc) return;
-  S.ui.docDraft = { id: doc.id, title: doc.title || '', rows: docClone(doc.rows || []), notes: (doc.notes || []).slice() };
+  S.ui.docDraft = { id: doc.id, title: doc.title || '', font: doc.font || 'Sarabun', blocks: docClone(doc.blocks || []) };
   render();
 }
-function cancelDocEdit() { S.ui.docDraft = null; render(); }   // กลับไปหน้าดู (ถ้ามี docId) หรือรายการ
-function docSetTitle(v) { if (S.ui.docDraft) S.ui.docDraft.title = v; }
-function docSetRow(i, f, v) { const d = S.ui.docDraft; if (d && d.rows[i]) d.rows[i][f] = v; }
-function docAddRow() { const d = S.ui.docDraft; if (d) { d.rows.push({ label: '', value: '' }); render(); } }
-function docDelRow(i) { const d = S.ui.docDraft; if (d) { d.rows.splice(i, 1); render(); } }
-function docSetNote(i, v) { const d = S.ui.docDraft; if (d) d.notes[i] = v; }
-function docAddNote() { const d = S.ui.docDraft; if (d) { d.notes.push(''); render(); } }
-function docDelNote(i) { const d = S.ui.docDraft; if (d) { d.notes.splice(i, 1); render(); } }
+function cancelDocEdit() { S.ui.docDraft = null; render(); }
+function docSetName(v) { if (S.ui.docDraft) S.ui.docDraft.title = v; }   // ไม่ render (กัน focus หลุดตอนพิมพ์)
+function docSetFont(v) { const d = S.ui.docDraft; if (d) { d.font = v; render(); } }
+// blkInput = แก้แล้วไม่ render (พิมพ์ข้อความ) · blkSet = แก้แล้ว render (ปรับสไตล์/พรีวิวอัปเดต)
+function blkInput(i, f, v) { const d = S.ui.docDraft; if (d && d.blocks[i]) d.blocks[i][f] = v; }
+function blkSet(i, f, v) { const d = S.ui.docDraft; if (d && d.blocks[i]) { d.blocks[i][f] = v; render(); } }
+function blkCell(i, j, f, v) { const d = S.ui.docDraft; if (d && d.blocks[i] && d.blocks[i].rows[j]) d.blocks[i].rows[j][f] = v; }
+function blkAddRow(i) { const d = S.ui.docDraft; if (d && d.blocks[i]) { (d.blocks[i].rows = d.blocks[i].rows || []).push({ label: '', value: '' }); render(); } }
+function blkDelRow(i, j) { const d = S.ui.docDraft; if (d && d.blocks[i] && d.blocks[i].rows) { d.blocks[i].rows.splice(j, 1); render(); } }
+function blkMove(i, dir) {
+  const d = S.ui.docDraft; if (!d) return;
+  const j = i + dir; if (j < 0 || j >= d.blocks.length) return;
+  const tmp = d.blocks[i]; d.blocks[i] = d.blocks[j]; d.blocks[j] = tmp; render();
+}
+function blkDel(i) { const d = S.ui.docDraft; if (d) { d.blocks.splice(i, 1); render(); } }
+function addBlock(type) { const d = S.ui.docDraft; if (d) { d.blocks.push(blockDefault(type)); render(); } }
 
 async function saveDoc() {
   const d = S.ui.docDraft; if (!d) return;
-  const title = (d.title || '').trim();
-  if (!title) { toast('ใส่ชื่อเอกสารก่อน', 'err'); return; }
-  const rows = (d.rows || []).map(r => ({ label: (r.label || '').trim(), value: (r.value || '').trim() })).filter(r => r.label || r.value);
-  const notes = (d.notes || []).map(n => (n || '').trim()).filter(Boolean);
-  const body = JSON.stringify({ rows, notes });
+  // ชื่อแกลเลอรี: ถ้าเว้นว่าง ใช้ข้อความหัวข้อแรก
+  let title = (d.title || '').trim();
+  if (!title) { const h = (d.blocks || []).find(b => b.type === 'heading' && (b.text || '').trim()); title = h ? h.text.trim() : 'เอกสารใหม่'; }
+  const blocks = (d.blocks || []).map(b => {
+    if (b.type === 'table') return Object.assign({}, b, { rows: (b.rows || []).map(r => ({ label: (r.label || '').trim(), value: (r.value || '').trim() })).filter(r => r.label || r.value) });
+    return b;
+  });
+  const body = JSON.stringify({ font: d.font || 'Sarabun', blocks });
   let ok = false, newId = d.id;
   await withBusy('docSaveBtn', async () => {
     const j = d.id ? await api.post('updateDoc', { id: d.id, title, body }) : await api.post('addDoc', { title, body });
@@ -1806,8 +1906,9 @@ Object.assign(window, {
   updateProduct, deleteProductPrompt, pickProductImage, deleteProductImage, armProductPaste,
   printUtility, printRound, submitEntry, closeModal,
   roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, openRoomReport,
-  newDoc, openDoc, backToDocs, editDoc, cancelDocEdit, docSetTitle, docSetRow, docAddRow, docDelRow,
-  docSetNote, docAddNote, docDelNote, saveDoc, deleteDocPrompt, printDocument,
+  newDoc, openDoc, backToDocs, editDoc, cancelDocEdit, docSetName, docSetFont,
+  blkInput, blkSet, blkCell, blkAddRow, blkDelRow, blkMove, blkDel, addBlock,
+  saveDoc, deleteDocPrompt, printDocument,
 });
 
 /* ============================================================
@@ -1825,12 +1926,19 @@ function demoData() {
       { id: 'rt4', source: 'plug', year: t.y, month: t.m, day: t.d, room: 3, temp: 1, overnight: 0, updatedAt: '' },
     ],
     notes: [{ id: 'n1', source: 'plug', year: t.y, month: t.m, text: 'เบียร์ลีโอ 8 ขวด', amount: 640, updatedAt: '' }],
-    docs: [{ id: 'doc1', title: 'กานดา 3 - 4', updatedAt: '', rows: [
-      { label: 'ชั้น 1 แอร์', value: '3,800' }, { label: 'ชั้น 1 พัดลม', value: '2,800' },
-      { label: 'ชั้น 2 แอร์', value: '3,800' }, { label: 'ชั้น 2 พัดลม', value: '2,800' },
-      { label: 'ชั้น 3 พัดลม', value: '2,300' }, { label: 'ชั้น 4 พัดลม', value: '2,200' },
-      { label: 'ชั้น 5 พัดลม', value: '2,100' },
-    ], notes: ['ค่าไฟ หน่วยละ 8 บาท', 'ค่าน้ำ หน่วยละ 24 บาท', 'โทร. 082-3638724'] }],
+    docs: [{ id: 'doc1', title: 'กานดา 3 - 4', updatedAt: '', font: 'Sarabun', blocks: [
+      { type: 'heading', text: 'ติดต่อห้องพัก', align: 'center', size: 'md', color: '#c0392b', bold: true },
+      { type: 'heading', text: 'กานดา 3 - 4', align: 'center', size: 'xl', bold: true },
+      { type: 'table', align: 'center', size: 'lg', border: true, rows: [
+        { label: 'ชั้น 1 แอร์', value: '3,800' }, { label: 'ชั้น 1 พัดลม', value: '2,800' },
+        { label: 'ชั้น 2 แอร์', value: '3,800' }, { label: 'ชั้น 2 พัดลม', value: '2,800' },
+        { label: 'ชั้น 3 พัดลม', value: '2,300' }, { label: 'ชั้น 4 พัดลม', value: '2,200' },
+        { label: 'ชั้น 5 พัดลม', value: '2,100' },
+      ] },
+      { type: 'text', text: 'ค่าไฟ หน่วยละ 8 บาท', align: 'center', size: 'md' },
+      { type: 'text', text: 'ค่าน้ำ หน่วยละ 24 บาท', align: 'center', size: 'md' },
+      { type: 'text', text: 'โทร. 082-3638724', align: 'center', size: 'md', color: '#c0392b', bold: true },
+    ] }],
     workers: [{ name: 'คนงาน 1', elecRate: 7, waterRate: 30 }],
     bills: [
       { id: 'b1', worker: 'คนงาน 1', year: 2569, month: 1, rent: 2000, eOld: 100, eNew: 145, wOld: 20, wNew: 24, extra: 0, note: '', paid: true },
