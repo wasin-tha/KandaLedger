@@ -1190,10 +1190,30 @@ const findDoc = id => (S.data.docs || []).find(d => d.id === id) || null;
 const blockDefault = type => ({
   heading: { type: 'heading', text: '', align: 'center', size: 'lg', bold: true },
   text: { type: 'text', text: '', align: 'center', size: 'md' },
-  table: { type: 'table', align: 'center', size: 'md', border: true, rows: [{ label: '', value: '' }] },
+  table: { type: 'table', align: 'center', size: 'md', border: true, cols: 2, rows: [['', '']] },
   divider: { type: 'divider' },
   spacer: { type: 'spacer', height: 16 },
 }[type]);
+
+/* ---- ตาราง: รองรับ N คอลัมน์ (row = array) + ของเก่า [{label,value}] (2 คอลัมน์) ---- */
+function tableModel(b) {
+  let rows = Array.isArray(b.rows) ? b.rows : [];
+  let cols = b.cols;
+  if (rows.length && !Array.isArray(rows[0])) {          // เก่า: [{label,value}] → [[label,value]]
+    rows = rows.map(r => [(r && r.label) || '', (r && r.value) || '']);
+    cols = 2;
+  } else {
+    rows = rows.map(r => (Array.isArray(r) ? r.map(c => (c == null ? '' : String(c))) : []));
+  }
+  cols = cols || (rows[0] ? rows[0].length : 2) || 2;
+  rows = rows.map(r => { r = r.slice(0, cols); while (r.length < cols) r.push(''); return r; });
+  return { cols, rows };
+}
+// แปลง table block ใน draft ให้เป็นรูป array model (เรียกตอนเริ่มแก้ → handlers สมมติ array ได้เลย)
+function normDraftTables(blocks) {
+  (blocks || []).forEach(b => { if (b.type === 'table') { const m = tableModel(b); b.cols = m.cols; b.rows = m.rows; } });
+  return blocks;
+}
 
 /* ---- การ render "กระดาษ" (ใช้ทั้งย่อ/เต็ม/พิมพ์/พรีวิว) ---- */
 const escMulti = s => esc(s).replace(/\n/g, '<br>');
@@ -1214,7 +1234,8 @@ function renderBlockView(b) {
     case 'divider': return `<hr class="pb-div">`;
     case 'spacer': return `<div style="height:${num(b.height) || 16}px"></div>`;
     case 'table': {
-      const rowsH = (b.rows || []).map(r => `<tr><td class="dp-l">${esc(r.label)}</td><td class="dp-v">${esc(r.value)}</td></tr>`).join('');
+      const { cols, rows } = tableModel(b);
+      const rowsH = rows.map(r => '<tr>' + r.map((c, ci) => `<td class="${ci === cols - 1 && cols > 1 ? 'dp-v' : 'dp-l'}">${esc(c)}</td>`).join('') + '</tr>').join('');
       const px = DOC_SIZE_PX[b.size] || 18;
       const fst = b.font ? `font-family:'${b.font}',sans-serif;` : '';
       return `<div class="pb" style="text-align:${b.align || 'center'}"><table class="dp-table${b.border === false ? ' noborder' : ''}" style="font-size:${px}px;${fst}">${rowsH}</table></div>`;
@@ -1296,14 +1317,19 @@ function renderBlockEdit(b, i, total) {
   else if (b.type === 'divider') body = `<div class="dim" style="text-align:center">— เส้นคั่น —</div>`;
   else if (b.type === 'spacer') body = `<label class="dim" style="display:flex;gap:8px;align-items:center">เว้นช่องสูง <input class="input" type="number" style="max-width:90px" value="${num(b.height) || 16}" oninput="blkInput(${i},'height',this.value)"> px</label>`;
   else if (b.type === 'table') {
-    const rs = (b.rows || []).map((r, j) => `
-      <div class="doc-erow">
-        <input class="input" value="${esc(r.label)}" placeholder="รายการ" oninput="blkCell(${i},${j},'label',this.value)">
-        <input class="input doc-ev" value="${esc(r.value)}" placeholder="ค่า/ราคา" oninput="blkCell(${i},${j},'value',this.value)">
-        <button class="btn btn-icon btn-ghost btn-sm" title="ลบแถว" onclick="blkDelRow(${i},${j})">${svg('trash')}</button>
-      </div>`).join('');
-    body = `<div class="doc-erows">${rs || '<p class="dim">ยังไม่มีแถว</p>'}</div>
-      <button class="btn btn-ghost btn-sm mt4" onclick="blkAddRow(${i})">${svg('plus')} เพิ่มแถว</button>`;
+    const { cols, rows } = tableModel(b);
+    const gt = `grid-template-columns:repeat(${cols},minmax(56px,1fr)) auto`;
+    const head = `<div class="doc-etrow doc-ethead" style="${gt}">${
+      Array.from({ length: cols }, (_, c) => `<button class="mini danger" title="ลบคอลัมน์นี้" onclick="blkDelCol(${i},${c})" ${cols <= 1 ? 'disabled' : ''}>✕</button>`).join('')
+      }<span></span></div>`;
+    const rs = rows.map((r, j) => `<div class="doc-etrow" style="${gt}">${
+      r.map((c, ci) => `<input class="input${ci === cols - 1 && cols > 1 ? ' doc-ev' : ''}" value="${esc(c)}" placeholder="${ci === cols - 1 && cols > 1 ? 'ค่า' : 'ข้อความ'}" oninput="blkCell(${i},${j},${ci},this.value)">`).join('')
+      }<button class="btn btn-icon btn-ghost btn-sm" title="ลบแถว" onclick="blkDelRow(${i},${j})">${svg('trash')}</button></div>`).join('');
+    body = `<div class="doc-etable">${rows.length ? head : ''}${rs || '<p class="dim">ยังไม่มีแถว</p>'}</div>
+      <div class="blk-add mt4">
+        <button class="btn btn-ghost btn-sm" onclick="blkAddRow(${i})">${svg('plus')} เพิ่มแถว</button>
+        <button class="btn btn-ghost btn-sm" onclick="blkAddCol(${i})">${svg('plus')} เพิ่มคอลัมน์</button>
+      </div>`;
   }
   return `<div class="blk">
     <div class="blk-bar">
@@ -1357,13 +1383,14 @@ function newDoc(tpl) {
   S.ui.docId = null;
   S.ui.docDraft = tpl === 'kanda' ? docClone(KANDA_DOC_TEMPLATE)
     : { id: null, title: '', font: 'Sarabun', blocks: [{ type: 'heading', text: '', align: 'center', size: 'xl', bold: true }] };
+  normDraftTables(S.ui.docDraft.blocks);
   render();
 }
 function openDoc(id) { S.ui.docId = id; S.ui.docDraft = null; render(); }
 function backToDocs() { S.ui.docId = null; S.ui.docDraft = null; render(); }
 function editDoc(id) {
   const doc = findDoc(id); if (!doc) return;
-  S.ui.docDraft = { id: doc.id, title: doc.title || '', font: doc.font || 'Sarabun', blocks: docClone(doc.blocks || []) };
+  S.ui.docDraft = { id: doc.id, title: doc.title || '', font: doc.font || 'Sarabun', blocks: normDraftTables(docClone(doc.blocks || [])) };
   render();
 }
 function cancelDocEdit() { S.ui.docDraft = null; render(); }
@@ -1372,9 +1399,12 @@ function docSetFont(v) { const d = S.ui.docDraft; if (d) { d.font = v; render();
 // blkInput = แก้แล้วไม่ render (พิมพ์ข้อความ) · blkSet = แก้แล้ว render (ปรับสไตล์/พรีวิวอัปเดต)
 function blkInput(i, f, v) { const d = S.ui.docDraft; if (d && d.blocks[i]) d.blocks[i][f] = v; }
 function blkSet(i, f, v) { const d = S.ui.docDraft; if (d && d.blocks[i]) { d.blocks[i][f] = v; render(); } }
-function blkCell(i, j, f, v) { const d = S.ui.docDraft; if (d && d.blocks[i] && d.blocks[i].rows[j]) d.blocks[i].rows[j][f] = v; }
-function blkAddRow(i) { const d = S.ui.docDraft; if (d && d.blocks[i]) { (d.blocks[i].rows = d.blocks[i].rows || []).push({ label: '', value: '' }); render(); } }
-function blkDelRow(i, j) { const d = S.ui.docDraft; if (d && d.blocks[i] && d.blocks[i].rows) { d.blocks[i].rows.splice(j, 1); render(); } }
+// ตาราง = array model (draft ถูก normDraftTables มาแล้ว). blkCell ไม่ render (พิมพ์), อื่น ๆ render
+function blkCell(i, j, c, v) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (b && b.rows[j]) b.rows[j][c] = v; }
+function blkAddRow(i) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (!b) return; b.rows = b.rows || []; b.rows.push(Array(b.cols || 2).fill('')); render(); }
+function blkDelRow(i, j) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (b && b.rows) { b.rows.splice(j, 1); render(); } }
+function blkAddCol(i) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (!b) return; b.cols = (b.cols || 2) + 1; b.rows = (b.rows || []).map(r => (r.push(''), r)); render(); }
+function blkDelCol(i, c) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (!b || (b.cols || 2) <= 1) return; b.cols = (b.cols || 2) - 1; b.rows = (b.rows || []).map(r => (r.splice(c, 1), r)); render(); }
 function blkMove(i, dir) {
   const d = S.ui.docDraft; if (!d) return;
   const j = i + dir; if (j < 0 || j >= d.blocks.length) return;
@@ -1389,7 +1419,11 @@ async function saveDoc() {
   let title = (d.title || '').trim();
   if (!title) { const h = (d.blocks || []).find(b => b.type === 'heading' && (b.text || '').trim()); title = h ? h.text.trim() : 'เอกสารใหม่'; }
   const blocks = (d.blocks || []).map(b => {
-    if (b.type === 'table') return Object.assign({}, b, { rows: (b.rows || []).map(r => ({ label: (r.label || '').trim(), value: (r.value || '').trim() })).filter(r => r.label || r.value) });
+    if (b.type === 'table') {
+      const m = tableModel(b);
+      const rows = m.rows.map(r => r.map(c => (c || '').trim())).filter(r => r.some(c => c)); // ตัดแถวที่ว่างทุกช่อง
+      return Object.assign({}, b, { cols: m.cols, rows });
+    }
     return b;
   });
   const body = JSON.stringify({ font: d.font || 'Sarabun', blocks });
@@ -1983,7 +2017,7 @@ Object.assign(window, {
   printUtility, printRound, submitEntry, closeModal,
   roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, openRoomReport,
   newDoc, openDoc, backToDocs, editDoc, cancelDocEdit, docSetName, docSetFont,
-  blkInput, blkSet, blkCell, blkAddRow, blkDelRow, blkMove, blkDel, addBlock,
+  blkInput, blkSet, blkCell, blkAddRow, blkDelRow, blkAddCol, blkDelCol, blkMove, blkDel, addBlock,
   saveDoc, deleteDocPrompt, printDocument,
 });
 

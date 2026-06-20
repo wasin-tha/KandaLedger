@@ -749,11 +749,12 @@ select.mini { padding: 3px 4px; max-width: 130px; }
 .mini.danger:hover { background: var(--danger-50); border-color: var(--danger); color: var(--danger); }
 .mini:disabled { opacity: .4; cursor: default; }
 .blk-add { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.doc-erows { display: flex; flex-direction: column; gap: 8px; }
-.doc-erow { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; align-items: center; }
-.doc-erow .doc-ev { text-align: right; font-variant-numeric: tabular-nums; }
+.doc-etable { display: flex; flex-direction: column; gap: 6px; }
+.doc-etrow { display: grid; gap: 6px; align-items: center; }
+.doc-etrow .doc-ev { text-align: right; font-variant-numeric: tabular-nums; }
+.doc-ethead .mini { padding: 2px 0; min-height: 22px; line-height: 1; }   /* ปุ่มลบคอลัมน์เรียงเหนือช่อง */
 @media (max-width: 480px) {
-  .doc-erow { grid-template-columns: 1fr 100px auto; gap: 6px; }
+  .doc-etrow { gap: 4px; }
   select.mini { max-width: 96px; }
 }
 
