@@ -216,7 +216,7 @@ new MutationObserver(() => {
 }).observe(document.body, { childList: true, subtree: true });
 document.addEventListener('mousedown', e => { if (_cselOpen && !_cselOpen.menu.contains(e.target) && !_cselOpen.btn.contains(e.target)) _cselClose(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') _cselClose(); });
-addEventListener('scroll', _cselClose, true);
+addEventListener('scroll', e => { if (_cselOpen && e.target !== _cselOpen.menu && !_cselOpen.menu.contains(e.target)) _cselClose(); }, true); // เลื่อนในเมนูได้, ปิดเฉพาะเลื่อนหน้าเพจ
 addEventListener('resize', _cselClose);
 enhanceSelects(document.body);
 
