@@ -1320,11 +1320,11 @@ function renderBlockEdit(b, i, total) {
     const { cols, rows } = tableModel(b);
     const gt = `grid-template-columns:repeat(${cols},minmax(56px,1fr)) 38px`; // คอลัมน์ท้าย = กว้างเท่าปุ่มถังขยะ (.btn-icon) → หัว(✕)กับแถวข้อมูลตรงกัน
     const head = `<div class="doc-etrow doc-ethead" style="${gt}">${
-      Array.from({ length: cols }, (_, c) => `<button class="mini danger" title="ลบคอลัมน์นี้" onclick="blkDelCol(${i},${c})" ${cols <= 1 ? 'disabled' : ''}>✕</button>`).join('')
+      Array.from({ length: cols }, (_, c) => `<button class="mini danger doc-del" title="ลบคอลัมน์นี้" onclick="blkDelCol(${i},${c})" onmouseenter="hiCol(this,${c},1)" onmouseleave="hiCol(this,${c},0)" ${cols <= 1 ? 'disabled' : ''}>✕</button>`).join('')
       }<span></span></div>`;
     const rs = rows.map((r, j) => `<div class="doc-etrow" style="${gt}">${
       r.map((c, ci) => `<input class="input${ci === cols - 1 && cols > 1 ? ' doc-ev' : ''}" value="${esc(c)}" placeholder="${ci === cols - 1 && cols > 1 ? 'ค่า' : 'ข้อความ'}" oninput="blkCell(${i},${j},${ci},this.value)">`).join('')
-      }<button class="btn btn-icon btn-ghost btn-sm" title="ลบแถว" onclick="blkDelRow(${i},${j})">${svg('trash')}</button></div>`).join('');
+      }<button class="mini danger doc-del" title="ลบแถวนี้" onclick="blkDelRow(${i},${j})" onmouseenter="hiRow(this,1)" onmouseleave="hiRow(this,0)">✕</button></div>`).join('');
     body = `<div class="doc-etable">${rows.length ? head : ''}${rs || '<p class="dim">ยังไม่มีแถว</p>'}</div>
       <div class="blk-add mt4">
         <button class="btn btn-ghost btn-sm" onclick="blkAddRow(${i})">${svg('plus')} เพิ่มแถว</button>
@@ -1402,9 +1402,21 @@ function blkSet(i, f, v) { const d = S.ui.docDraft; if (d && d.blocks[i]) { d.bl
 // ตาราง = array model (draft ถูก normDraftTables มาแล้ว). blkCell ไม่ render (พิมพ์), อื่น ๆ render
 function blkCell(i, j, c, v) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (b && b.rows[j]) b.rows[j][c] = v; }
 function blkAddRow(i) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (!b) return; b.rows = b.rows || []; b.rows.push(Array(b.cols || 2).fill('')); render(); }
-function blkDelRow(i, j) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (b && b.rows) { b.rows.splice(j, 1); render(); } }
+function blkDelRow(i, j) {
+  confirmDialog('ลบแถวนี้?', () => { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (b && b.rows) { b.rows.splice(j, 1); render(); } }, { danger: true, label: 'ลบแถว' });
+}
 function blkAddCol(i) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (!b) return; b.cols = (b.cols || 2) + 1; b.rows = (b.rows || []).map(r => (r.push(''), r)); render(); }
-function blkDelCol(i, c) { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (!b || (b.cols || 2) <= 1) return; b.cols = (b.cols || 2) - 1; b.rows = (b.rows || []).map(r => (r.splice(c, 1), r)); render(); }
+function blkDelCol(i, c) {
+  const b0 = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (!b0 || (b0.cols || 2) <= 1) return;
+  confirmDialog('ลบทั้งคอลัมน์นี้ (ทุกแถว)?', () => { const b = S.ui.docDraft && S.ui.docDraft.blocks[i]; if (!b || (b.cols || 2) <= 1) return; b.cols = (b.cols || 2) - 1; b.rows = (b.rows || []).map(r => (r.splice(c, 1), r)); render(); }, { danger: true, label: 'ลบคอลัมน์' });
+}
+// hover ปุ่ม ✕ → ไฮไลต์แถว/คอลัมน์ที่จะโดนลบ
+function hiRow(el, on) { const r = el.closest('.doc-etrow'); if (r) r.classList.toggle('del-hot', !!on); }
+function hiCol(el, c, on) {
+  const t = el.closest('.doc-etable'); if (!t) return;
+  el.classList.toggle('del-hot', !!on);
+  t.querySelectorAll('.doc-etrow:not(.doc-ethead)').forEach(r => { const cell = r.children[c]; if (cell) cell.classList.toggle('del-hot', !!on); });
+}
 function blkMove(i, dir) {
   const d = S.ui.docDraft; if (!d) return;
   const j = i + dir; if (j < 0 || j >= d.blocks.length) return;
@@ -2017,7 +2029,7 @@ Object.assign(window, {
   printUtility, printRound, submitEntry, closeModal,
   roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, openRoomReport,
   newDoc, openDoc, backToDocs, editDoc, cancelDocEdit, docSetName, docSetFont,
-  blkInput, blkSet, blkCell, blkAddRow, blkDelRow, blkAddCol, blkDelCol, blkMove, blkDel, addBlock,
+  blkInput, blkSet, blkCell, blkAddRow, blkDelRow, blkAddCol, blkDelCol, hiRow, hiCol, blkMove, blkDel, addBlock,
   saveDoc, deleteDocPrompt, printDocument,
 });
 

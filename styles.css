@@ -753,6 +753,10 @@ select.mini { padding: 3px 4px; max-width: 130px; }
 .doc-etrow { display: grid; gap: 6px; align-items: center; }
 .doc-etrow .doc-ev { text-align: right; font-variant-numeric: tabular-nums; }
 .doc-ethead .mini { padding: 2px 0; min-height: 22px; line-height: 1; }   /* ปุ่มลบคอลัมน์เรียงเหนือช่อง */
+.doc-del { font-size: 13px; }
+/* hover ปุ่ม ✕ → ไฮไลต์แถว/คอลัมน์ที่จะโดนลบ */
+.doc-etrow.del-hot .input, .doc-etrow .input.del-hot { background: var(--danger-50); border-color: var(--danger); }
+.doc-del.del-hot { background: var(--danger); border-color: var(--danger); color: #fff; }
 @media (max-width: 480px) {
   .doc-etrow { gap: 4px; }
   select.mini { max-width: 96px; }
