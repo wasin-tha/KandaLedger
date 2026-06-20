@@ -715,10 +715,12 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .dp-table td { border: 1px solid #475569; padding: 8px 16px; }
 .dp-table .dp-v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 28px; }
 
-.doc-stage { display: flex; justify-content: center; padding: 8px 0 4px; }
+.doc-stage { display: flex; justify-content: center; padding: 8px 0 4px; overflow-x: auto; }
 /* view-preview + print ใช้ .doc-print เหมือนกัน → ขนาดเท่ากันเป๊ะ (WYSIWYG).
-   zoom 1.4 = ค่าสูงสุดที่ยังพิมพ์พอดี 1 หน้า (เทส headless: 1.42 พอดี, 1.45 ล้น) */
+   zoom = ค่าสูงสุดที่ยังพิมพ์พอดี 1 หน้า (เทส headless) — แนวตั้ง 1.4, แนวนอน 1.45 */
 .doc-print .paper { zoom: 1.4; }
+.paper.land { max-width: 700px; }                  /* กระดาษแนวนอนกว้างกว่า */
+.doc-print.land .paper { zoom: 1.45; }
 
 /* --- แกลเลอรี --- */
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
@@ -763,8 +765,14 @@ select.mini { padding: 3px 4px; max-width: 130px; }
 }
 
 /* --- พิมพ์เอกสาร: render กระดาษเหมือน preview เป๊ะ (WYSIWYG) — ไม่ zoom/scale --- */
+@page docland { size: A4 landscape; margin: 12mm; }   /* named page สำหรับเอกสารแนวนอน */
 @media print {
   .doc-print { text-align: center; }
   .doc-print .paper { box-shadow: none; border: none; margin: 0 auto; }
+  .doc-print.land { page: docland; }                  /* เอกสารแนวนอน → หน้า A4 แนวนอน */
   .doc-print .dp-table, .doc-print .dp-table td { border-color: #1f2937; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ตัวเลือกเทมเพลตตอนเพิ่มเอกสาร */
+.tpl-list { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.tpl-pick { justify-content: flex-start; gap: 9px; }

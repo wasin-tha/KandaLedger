@@ -1186,6 +1186,37 @@ const KANDA_DOC_TEMPLATE = {
     { type: 'text', text: 'ป้ากลม', align: 'right', size: 'sm', color: '#1d4ed8' },
   ],
 };
+// ใบติดต่อห้องเช่า (ป้ายบนในรูป)
+const KANDA_CONTACT_TEMPLATE = {
+  id: null, title: 'ติดต่อห้องเช่า', font: 'Sarabun', orient: 'portrait',
+  blocks: [
+    { type: 'heading', text: 'ติดต่อห้องเช่า', align: 'center', size: 'xxl', bold: true, color: '#0e7490' },
+    { type: 'spacer', height: 20 },
+    { type: 'table', align: 'center', size: 'xl', border: false, cols: 2, rows: [
+      ['096-7432899', 'ป้ากลม'], ['098-1698209', 'ป้ากลม'], ['092-2757994', 'ปลั๊ก'],
+    ] },
+  ],
+};
+// ใบข้อมูล กานดา อพาทเม้นต์ 3-4 (ป้ายล่างในรูป)
+const KANDA_RENT_TEMPLATE = {
+  id: null, title: 'กานดา อพาทเม้นต์ 3 - 4', font: 'Sarabun', orient: 'portrait',
+  blocks: [
+    { type: 'heading', text: 'กานดา อพาทเม้นต์ 3 – 4', align: 'center', size: 'xl', bold: true },
+    { type: 'spacer', height: 12 },
+    { type: 'text', text: 'ติดต่อเช่าห้อง / แจ้งย้ายออก / ชำระค่าเช่า-น้ำ-ไฟ', align: 'center', size: 'md' },
+    { type: 'spacer', height: 10 },
+    { type: 'text', text: '*** ถ้าแม่บ้านไม่อยู่สามารถติดต่อได้ที่', align: 'center', size: 'md', underline: true },
+    { type: 'text', text: 'โทร : 092-2757994', align: 'center', size: 'md', bold: true },
+  ],
+};
+// ทะเบียนเทมเพลต (ใช้ในตัวเลือก "เพิ่มเอกสาร")
+const DOC_TEMPLATES = {
+  blank: { label: 'เอกสารเปล่า', make: () => ({ id: null, title: '', font: 'Sarabun', orient: 'portrait', blocks: [{ type: 'heading', text: '', align: 'center', size: 'xl', bold: true }] }) },
+  contact: { label: 'ติดต่อห้องเช่า', make: () => docClone(KANDA_CONTACT_TEMPLATE) },
+  rent: { label: 'กานดา อพาทเม้นต์ 3-4', make: () => docClone(KANDA_RENT_TEMPLATE) },
+  kanda: { label: 'ตารางค่าเช่า (กานดา 3-4)', make: () => docClone(KANDA_DOC_TEMPLATE) },
+};
+const DOC_ORIENTS = [{ id: 'portrait', label: 'แนวตั้ง' }, { id: 'landscape', label: 'แนวนอน' }];
 const docClone = d => JSON.parse(JSON.stringify(d));
 const findDoc = id => (S.data.docs || []).find(d => d.id === id) || null;
 const blockDefault = type => ({
@@ -1251,8 +1282,9 @@ function renderBlockView(b) {
 }
 function docPaperHtml(doc) {
   const font = doc.font || 'Sarabun';
+  const land = doc.orient === 'landscape' ? ' land' : '';
   const blocks = (doc.blocks || []).map(renderBlockView).join('');
-  return `<div class="paper" style="font-family:'${font}',sans-serif">${blocks || '<div class="pb pb-t" style="text-align:center;color:#94a3b8">เอกสารว่าง</div>'}</div>`;
+  return `<div class="paper${land}" style="font-family:'${font}',sans-serif">${blocks || '<div class="pb pb-t" style="text-align:center;color:#94a3b8">เอกสารว่าง</div>'}</div>`;
 }
 
 function renderDocs() {
@@ -1266,11 +1298,11 @@ function renderDocList() {
   let h = `<div class="card card-pad">
     <div class="toolbar between" style="align-items:center">
       <div class="section-title">${svg('doc')} เอกสาร</div>
-      <button class="btn btn-primary btn-sm no-print" onclick="newDoc()">${svg('plus')} เพิ่มเอกสาร</button>
+      <button class="btn btn-primary btn-sm no-print" onclick="newDocChoose()">${svg('plus')} เพิ่มเอกสาร</button>
     </div>`;
   if (!docs.length) {
     h += panelEmpty('doc', 'ยังไม่มีเอกสาร', 'เอกสารพร้อมพิมพ์ — เจ้าของและปลั๊กเพิ่ม/แก้/พิมพ์ร่วมกันได้') +
-      `<div class="mt4" style="text-align:center"><button class="btn btn-primary" onclick="newDoc('kanda')">${svg('plus')} สร้างเอกสาร กานดา 3-4</button></div>`;
+      `<div class="mt4" style="text-align:center"><button class="btn btn-primary" onclick="newDocChoose()">${svg('plus')} สร้างเอกสาร</button></div>`;
   } else {
     h += '<div class="doc-grid mt4">';
     docs.forEach(doc => {
@@ -1296,7 +1328,7 @@ function renderDocView(doc) {
         <button class="btn btn-accent btn-sm" onclick="printDocument('${esc(doc.id)}')">${svg('printer')} พิมพ์</button>
       </div>
     </div>
-    <div class="doc-stage mt4"><div class="doc-print">${docPaperHtml(doc)}</div></div>
+    <div class="doc-stage mt4"><div class="doc-print${doc.orient === 'landscape' ? ' land' : ''}">${docPaperHtml(doc)}</div></div>
   </div>`;
 }
 
@@ -1365,6 +1397,8 @@ function renderDocEditor(d) {
           <input class="input" value="${esc(d.title)}" placeholder="เช่น กานดา 3 - 4" oninput="docSetName(this.value)"></div>
         <div class="field"><label>ฟอนต์หลัก</label>
           <select class="input" onchange="docSetFont(this.value)">${optset(DOC_FONTS, d.font || 'Sarabun')}</select></div>
+        <div class="field"><label>แนวกระดาษ</label>
+          <select class="input" onchange="docSetOrient(this.value)">${optset(DOC_ORIENTS, d.orient || 'portrait')}</select></div>
       </div>
 
       <div class="blk-list mt4">${blocksH}</div>
@@ -1386,10 +1420,16 @@ function renderDocEditor(d) {
 }
 
 /* ---- docs handlers ---- */
+// เลือกเทมเพลตก่อนสร้าง (custom popup)
+function newDocChoose() {
+  const btns = Object.keys(DOC_TEMPLATES).map(k => `<button class="btn btn-ghost tpl-pick" onclick="newDoc('${k}');closeModal()">${svg('doc')} ${esc(DOC_TEMPLATES[k].label)}</button>`).join('');
+  openModal(`<h3>${svg('plus')} เพิ่มเอกสาร</h3><p class="muted">เลือกเทมเพลตเริ่มต้น</p><div class="tpl-list">${btns}</div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button></div>`);
+}
 function newDoc(tpl) {
   S.ui.docId = null;
-  S.ui.docDraft = tpl === 'kanda' ? docClone(KANDA_DOC_TEMPLATE)
-    : { id: null, title: '', font: 'Sarabun', blocks: [{ type: 'heading', text: '', align: 'center', size: 'xl', bold: true }] };
+  const t = DOC_TEMPLATES[tpl] || DOC_TEMPLATES.blank;
+  S.ui.docDraft = t.make();
   normDraftTables(S.ui.docDraft.blocks);
   render();
 }
@@ -1397,12 +1437,13 @@ function openDoc(id) { S.ui.docId = id; S.ui.docDraft = null; render(); }
 function backToDocs() { S.ui.docId = null; S.ui.docDraft = null; render(); }
 function editDoc(id) {
   const doc = findDoc(id); if (!doc) return;
-  S.ui.docDraft = { id: doc.id, title: doc.title || '', font: doc.font || 'Sarabun', blocks: normDraftTables(docClone(doc.blocks || [])) };
+  S.ui.docDraft = { id: doc.id, title: doc.title || '', font: doc.font || 'Sarabun', orient: doc.orient || 'portrait', blocks: normDraftTables(docClone(doc.blocks || [])) };
   render();
 }
 function cancelDocEdit() { S.ui.docDraft = null; render(); }
 function docSetName(v) { if (S.ui.docDraft) S.ui.docDraft.title = v; }   // ไม่ render (กัน focus หลุดตอนพิมพ์)
 function docSetFont(v) { const d = S.ui.docDraft; if (d) { d.font = v; render(); } }
+function docSetOrient(v) { const d = S.ui.docDraft; if (d) { d.orient = v; render(); } }
 // blkInput = แก้แล้วไม่ render (พิมพ์ข้อความ) · blkSet = แก้แล้ว render (ปรับสไตล์/พรีวิวอัปเดต)
 function blkInput(i, f, v) { const d = S.ui.docDraft; if (d && d.blocks[i]) d.blocks[i][f] = v; }
 function blkSet(i, f, v) { const d = S.ui.docDraft; if (d && d.blocks[i]) { d.blocks[i][f] = v; render(); } }
@@ -1445,7 +1486,7 @@ async function saveDoc() {
     }
     return b;
   });
-  const body = JSON.stringify({ font: d.font || 'Sarabun', blocks });
+  const body = JSON.stringify({ font: d.font || 'Sarabun', orient: d.orient === 'landscape' ? 'landscape' : 'portrait', blocks });
   let ok = false, newId = d.id;
   await withBusy('docSaveBtn', async () => {
     const j = d.id ? await api.post('updateDoc', { id: d.id, title, body }) : await api.post('addDoc', { title, body });
@@ -2035,7 +2076,7 @@ Object.assign(window, {
   updateProduct, deleteProductPrompt, pickProductImage, deleteProductImage, armProductPaste,
   printUtility, printRound, submitEntry, closeModal,
   roomSelectTab, roomToggleDay, roomShiftMonth, roomToday, roomSet, addRoomNote, editRoomNote, deleteRoomNote, openRoomReport,
-  newDoc, openDoc, backToDocs, editDoc, cancelDocEdit, docSetName, docSetFont,
+  newDoc, newDocChoose, openDoc, backToDocs, editDoc, cancelDocEdit, docSetName, docSetFont, docSetOrient,
   blkInput, blkSet, blkCell, blkAddRow, blkDelRow, blkAddCol, blkDelCol, hiRow, hiCol, blkMove, blkDel, addBlock,
   saveDoc, deleteDocPrompt, printDocument,
 });
