@@ -716,11 +716,9 @@ tr.paid .total-cell { text-decoration: line-through; color: var(--success); }
 .dp-table .dp-v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 28px; }
 
 .doc-stage { display: flex; justify-content: center; padding: 8px 0 4px; overflow-x: auto; }
-/* view-preview + print ใช้ .doc-print เหมือนกัน → ขนาดเท่ากันเป๊ะ (WYSIWYG).
-   zoom = ค่าสูงสุดที่ยังพิมพ์พอดี 1 หน้า (เทส headless) — แนวตั้ง 1.4, แนวนอน 1.45 */
-.doc-print .paper { zoom: 1.4; }
-.paper.land { max-width: 700px; }                  /* กระดาษแนวนอนกว้างกว่า */
-.doc-print.land .paper { zoom: 1.45; }
+/* view-preview + print ใช้ .doc-print เหมือนกัน → ขนาดเท่ากัน (WYSIWYG).
+   zoom คำนวณอัตโนมัติด้วย fitPaper() ใน app.js (วัดเนื้อหา → พอดีหน้า ไม่ล้น) — ไม่ใช้ค่าคงที่แล้ว */
+.paper.land { max-width: 700px; }                  /* กระดาษแนวนอนกว้างกว่า (ตอนแก้ไข) */
 
 /* --- แกลเลอรี --- */
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }

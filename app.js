@@ -321,6 +321,23 @@ function render() {
   else if (S.module === 'purchase') view.innerHTML = renderPurchase();
   else if (S.module === 'docs') view.innerHTML = renderDocs();
   else view.innerHTML = renderRooms();
+  if (S.module === 'docs') requestAnimationFrame(fitDocPreviews);   // auto-fit พรีวิวเอกสารให้ขนาดเท่าตอนพิมพ์
+}
+// ขยาย "กระดาษ" ให้พอดีหน้า A4 (ไม่ล้น/ไม่ถูกตัด) — วัดเนื้อหาจริงแล้วคำนวณ zoom = min(พอดีกว้าง, พอดีสูง)
+// พื้นที่พิมพ์ A4 @96dpi ลบขอบ 12mm: แนวตั้ง 703×1032px, แนวนอน 1032×703px
+function fitPaper(paper, land) {
+  if (!paper) return;
+  paper.style.display = 'inline-block';
+  paper.style.width = 'auto';
+  paper.style.maxWidth = 'none';
+  paper.style.zoom = '1';
+  const w = paper.offsetWidth, h = paper.offsetHeight;
+  if (!w || !h) return;
+  const PW = land ? 1032 : 703, PH = land ? 703 : 1032;
+  paper.style.zoom = Math.min(PW / w, PH / h).toFixed(3);
+}
+function fitDocPreviews() {
+  $$('.doc-stage .doc-print .paper').forEach(p => fitPaper(p, p.closest('.doc-print').classList.contains('land')));
 }
 
 function renderBackendBanner() {
@@ -1505,7 +1522,14 @@ function deleteDocPrompt(id) {
 function printDocument(id) {
   const doc = findDoc(id); if (!doc) return;
   const land = doc.orient === 'landscape';
-  printDoc(`<div class="doc-print${land ? ' land' : ''}">${docPaperHtml(doc)}</div>`, land ? 'landscape' : 'portrait');
+  const area = ensurePrintArea();
+  area.innerHTML = `<div class="doc-print${land ? ' land' : ''}">${docPaperHtml(doc)}</div>`;
+  // วัดขนาดแบบมองไม่เห็น (printArea ปกติ display:none) แล้ว auto-fit ให้เต็มหน้าพอดี
+  area.style.cssText = 'display:block;position:fixed;left:-99999px;top:0;visibility:hidden';
+  fitPaper(area.querySelector('.paper'), land);
+  area.style.cssText = '';
+  setPageOrient(land ? 'landscape' : 'portrait');
+  window.print();
 }
 
 /* ============================================================
