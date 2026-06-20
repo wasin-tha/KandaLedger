@@ -1504,7 +1504,8 @@ function deleteDocPrompt(id) {
 }
 function printDocument(id) {
   const doc = findDoc(id); if (!doc) return;
-  printDoc(`<div class="doc-print">${docPaperHtml(doc)}</div>`);
+  const land = doc.orient === 'landscape';
+  printDoc(`<div class="doc-print${land ? ' land' : ''}">${docPaperHtml(doc)}</div>`, land ? 'landscape' : 'portrait');
 }
 
 /* ============================================================
@@ -1971,7 +1972,13 @@ function ensurePrintArea() {
   if (!p) { p = document.createElement('div'); p.id = 'printArea'; p.className = 'print-only'; document.body.appendChild(p); }
   return p;
 }
-function printDoc(html) { ensurePrintArea().innerHTML = html; window.print(); }
+// inject @page แบบ dynamic เพื่อบังคับแนวกระดาษ (Chrome interactive ไม่รองรับ named @page เปลี่ยน orientation)
+function setPageOrient(orient) {
+  let s = document.getElementById('pageOrient');
+  if (!s) { s = document.createElement('style'); s.id = 'pageOrient'; document.head.appendChild(s); }
+  s.textContent = `@media print { @page { size: A4 ${orient === 'landscape' ? 'landscape' : 'portrait'}; margin: 12mm; } }`;
+}
+function printDoc(html, orient = 'portrait') { setPageOrient(orient); ensurePrintArea().innerHTML = html; window.print(); }
 
 function printUtility() {
   const name = S.ui.worker, w = workerObj(name), rows = workerBills(name);

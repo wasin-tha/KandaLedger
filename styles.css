@@ -764,12 +764,11 @@ select.mini { padding: 3px 4px; max-width: 130px; }
   select.mini { max-width: 96px; }
 }
 
-/* --- พิมพ์เอกสาร: render กระดาษเหมือน preview เป๊ะ (WYSIWYG) — ไม่ zoom/scale --- */
-@page docland { size: A4 landscape; margin: 12mm; }   /* named page สำหรับเอกสารแนวนอน */
+/* --- พิมพ์เอกสาร: render กระดาษเหมือน preview เป๊ะ (WYSIWYG) — ไม่ zoom/scale ·
+   แนวกระดาษคุมด้วย @page ที่ inject แบบ dynamic ตอนพิมพ์ (ดู setPageOrient ใน app.js) --- */
 @media print {
   .doc-print { text-align: center; }
   .doc-print .paper { box-shadow: none; border: none; margin: 0 auto; }
-  .doc-print.land { page: docland; }                  /* เอกสารแนวนอน → หน้า A4 แนวนอน */
   .doc-print .dp-table, .doc-print .dp-table td { border-color: #1f2937; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
